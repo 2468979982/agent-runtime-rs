@@ -1,0 +1,29 @@
+[package]
+name = "agent-runtime-rs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+dotenvy = "0.15"
+anyhow = "1.0"
+tempfile = "3.5"
+async-trait = "0.1"
+meval = "0.2"
+regex = "1.10"
+chrono = { version = "0.4", features = ["serde"] }
+tokio = { version = "1.0", features = ["full"] }
+reqwest = { version = "0.12", features = ["json"] }
+async-openai = "0.18"
+uuid = { version = "1.7", features = ["v4", "serde"] }
+serde_yaml = "0.9"
+axum = "0.7"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+http = "1.0"
+http-body = "1.0"
+bytes = "1.5"
