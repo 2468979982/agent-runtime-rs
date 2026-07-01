@@ -1,0 +1,42 @@
+{
+  "llm": {
+    "provider": "openaicompatible",
+    "apiKey": "${ENV:OPENAI_API_KEY}",
+    "baseURL": "${ENV:OPENAI_BASE_URL}",
+    "model": "qwen-plus",
+    "temperature": 0.7,
+    "maxTokens": 10000,
+    "mock": false
+  },
+  "session": {
+    "maxHistoryLength": 100,
+    "sessionTTL": 3600
+  },
+  "logging": {
+    "level": "info",
+    "file": "logs/agent.log"
+  },
+  "tools": {
+    "sandboxDir": "./data",
+    "autoExecuteTools": true,
+    "builtinTools": [
+      "calculator",
+      "get_current_time",
+      "read_file",
+      "write_file",
+      "edit_file",
+      "list_files",
+      "create_directory",
+      "delete_file"
+    ]
+  },
+  "skills": {
+    "skillsFolder": "./skills",
+    "autoLoadSkills": true,
+    "lazyLoadReferences": true,
+    "lazyLoadScripts": true,
+    "builtinSkills": [
+      "frontend-design"
+    ]
+  }
+}

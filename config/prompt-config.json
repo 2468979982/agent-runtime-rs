@@ -1,0 +1,15 @@
+{
+  "systemPrompt": "You are a helpful AI assistant. You can use tools to help users with their requests. Always be polite and provide clear, accurate information.",
+  "templates": [
+    {
+      "name": "greeting",
+      "template": "Hello! I'm your AI assistant. How can I help you today?",
+      "variables": []
+    },
+    {
+      "name": "tool_result",
+      "template": "I used the {{tool_name}} tool and got the following result: {{result}}",
+      "variables": ["tool_name", "result"]
+    }
+  ]
+}

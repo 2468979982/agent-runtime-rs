@@ -1,0 +1,889 @@
+{
+  "mcpServers": {
+    "apphunter": {
+      "command": "node",
+      "args": [
+        "E:/myapp/MCPServer/AppHunter/dist/index.js"
+      ],
+      "env": {
+        "DB_PATH": "C:/Users/24689/AppData/Roaming/AppHunter/apphunter.db",
+        "MCP_READWRITE": "true"
+      },
+      "disabled": false
+    }
+  },
+  "builtinTools": [
+    {
+      "name": "calculator",
+      "description": "Perform mathematical calculations. Supports basic arithmetic (+, -, *, /), parentheses, decimal numbers, and scientific notation (e.g., 1.5e3). Input is sanitized for security.",
+      "parameters": [
+        {
+          "name": "expression",
+          "type": "string",
+          "required": true,
+          "description": "Mathematical expression to evaluate (e.g., '2 + 3 * 4', 'sin(0.5)', '(1 + 2) * 3')"
+        }
+      ]
+    },
+    {
+      "name": "get_current_time",
+      "description": "Get current date and time in specified timezone. Supports common timezones (UTC, Asia/Shanghai, America/New_York, etc.).",
+      "parameters": [
+        {
+          "name": "timezone",
+          "type": "string",
+          "required": false,
+          "description": "Timezone name (e.g., 'UTC', 'Asia/Shanghai', 'America/New_York'). Default: 'Asia/Shanghai'"
+        }
+      ]
+    },
+    {
+      "name": "read_file",
+      "description": "Read content from a file. Supports both relative paths (relative to sandbox directory) and absolute paths. Maximum file size: 10MB.",
+      "parameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "required": true,
+          "description": "File path to read (relative to sandbox or absolute path)"
+        },
+        {
+          "name": "encoding",
+          "type": "string",
+          "required": false,
+          "description": "File encoding (default: 'utf-8'). Common values: 'utf-8', 'ascii', 'base64'"
+        }
+      ]
+    },
+    {
+      "name": "write_file",
+      "description": "Write content to a file. Creates file if it doesn't exist, overwrites if it does. Supports relative and absolute paths. Maximum file size: 10MB.",
+      "parameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "required": true,
+          "description": "File path to write (relative to sandbox or absolute path)"
+        },
+        {
+          "name": "content",
+          "type": "string",
+          "required": true,
+          "description": "Content to write to the file"
+        },
+        {
+          "name": "encoding",
+          "type": "string",
+          "required": false,
+          "description": "File encoding (default: 'utf-8')"
+        }
+      ]
+    },
+    {
+      "name": "edit_file",
+      "description": "Edit a file using diff format. Applies unified diff to existing file. Useful for making targeted changes without rewriting entire file.",
+      "parameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "required": true,
+          "description": "File path to edit (relative to sandbox or absolute path)"
+        },
+        {
+          "name": "diff",
+          "type": "string",
+          "required": true,
+          "description": "Unified diff format string describing the changes to apply"
+        }
+      ]
+    },
+    {
+      "name": "list_files",
+      "description": "List files and directories in a specified path. Supports recursive listing with depth limit (max 10 levels). Returns file names, types, and sizes.",
+      "parameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "required": false,
+          "description": "Directory path to list (default: current directory). Relative to sandbox or absolute path."
+        },
+        {
+          "name": "recursive",
+          "type": "boolean",
+          "required": false,
+          "description": "Whether to list files recursively (default: false)"
+        }
+      ]
+    },
+    {
+      "name": "create_directory",
+      "description": "Create a new directory. Creates parent directories if they don't exist (like mkdir -p).",
+      "parameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "required": true,
+          "description": "Directory path to create (relative to sandbox or absolute path)"
+        }
+      ]
+    },
+    {
+      "name": "delete_file",
+      "description": "Delete a file or directory. For directories, recursively deletes all contents. Use with caution! Supports safety checks to prevent accidental deletion of critical files.",
+      "parameters": [
+        {
+          "name": "path",
+          "type": "string",
+          "required": true,
+          "description": "File or directory path to delete (relative to sandbox or absolute path)"
+        },
+        {
+          "name": "recursive",
+          "type": "boolean",
+          "required": false,
+          "description": "Whether to recursively delete directories (default: false). Set to true to delete non-empty directories."
+        }
+      ]
+    }
+  ],
+  "mcpToolDefinitions": {
+    "apphunter": [
+      {
+        "type": "function",
+        "function": {
+          "name": "apphunter/opportunity_list",
+          "description": "列出所有应用市场机会，支持按状态/分类/关键词筛选，返回含综合评分的列表",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "description": "状态筛选: pending|evaluating|approved|rejected"
+              },
+              "category": {
+                "type": "string",
+                "description": "分类筛选（模糊匹配）"
+              },
+              "keyword": {
+                "type": "string",
+                "description": "关键词搜索（名称/备注）"
+              },
+              "sort": {
+                "type": "string",
+                "description": "排序方式: created_at|total_score"
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "apphunter/opportunity_get",
+          "description": "获取单个机会详情，含评分、评论数、需求数",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "number",
+                "description": "机会 ID"
+              }
+            },
+            "required": ["id"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "apphunter/opportunity_create",
+          "description": "创建新的应用市场机会（需要读写模式）",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "应用名称"
+              },
+              "platform": {
+                "type": "string",
+                "description": "平台: iOS|Android|Web|Desktop"
+              },
+              "store_url": {
+                "type": "string",
+                "description": "应用商店链接"
+              },
+              "store_rating": {
+                "type": "number",
+                "description": "商店评分"
+              },
+              "rating_count": {
+                "type": "number",
+                "description": "评分数量"
+              },
+              "pricing_model": {
+                "type": "string",
+                "description": "定价模式: free|freemium|paid|subscription"
+              },
+              "price": {
+                "type": "number",
+                "description": "价格"
+              },
+              "est_downloads": {
+                "type": "string",
+                "description": "预估下载量"
+              },
+              "category": {
+                "type": "string",
+                "description": "分类"
+              },
+              "notes": {
+                "type": "string",
+                "description": "备注"
+              }
+            },
+            "required": ["name", "platform"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "apphunter/opportunity_update",
+          "description": "更新机会的字段（需要读写模式）",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "number",
+                "description": "机会 ID"
+              },
+              "name": {
+                "type": "string",
+                "description": "应用名称"
+              },
+              "platform": {
+                "type": "string",
+                "description": "平台"
+              },
+              "store_url": {
+                "type": "string",
+                "description": "应用商店链接"
+              },
+              "store_rating": {
+                "type": "number",
+                "description": "商店评分"
+              },
+              "rating_count": {
+                "type": "number",
+                "description": "评分数量"
+              },
+              "pricing_model": {
+                "type": "string",
+                "description": "定价模式"
+              },
+              "price": {
+                "type": "number",
+                "description": "价格"
+              },
+              "est_downloads": {
+                "type": "string",
+                "description": "预估下载量"
+              },
+              "category": {
+                "type": "string",
+                "description": "分类"
+              },
+              "notes": {
+                "type": "string",
+                "description": "备注"
+              },
+              "status": {
+                "type": "string",
+                "description": "状态: pending|evaluating|approved|rejected"
+              }
+            },
+            "required": ["id"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "apphunter/opportunity_score",
+          "description": "为机会评分（痛点×3, 付费意愿×3, 难度×2, 竞争×1, 兴趣×1），自动计算综合分（需要读写模式）",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "number",
+                "description": "机会 ID"
+              },
+              "pain_score": {
+                "type": "number",
+                "description": "痛点评分 (1-5)"
+              },
+              "willingness_score": {
+                "type": "number",
+                "description": "付费意愿评分 (1-5)"
+              },
+              "dev_ease_score": {
+                "type": "number",
+                "description": "开发难度评分 (1-5, 越高越容易)"
+              },
+              "competition_score": {
+                "type": "number",
+                "description": "竞争评分 (1-5, 越高竞争越大)"
+              },
+              "interest_score": {
+                "type": "number",
+                "description": "兴趣评分 (1-5)"
+              }
+            },
+            "required": ["id", "pain_score", "willingness_score", "dev_ease_score", "competition_score", "interest_score"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "apphunter/opportunity_approve",
+          "description": "批准机会立项，自动更新机会状态为 approved 并创建关联项目（需要读写模式）",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "number",
+                "description": "机会 ID"
+              },
+              "name": {
+                "type": "string",
+                "description": "项目名称"
+              },
+              "tech_stack": {
+                "type": "string",
+                "description": "技术栈"
+              },
+              "target_platform": {
+                "type": "string",
+                "description": "目标平台"
+              },
+              "planned_launch_date": {
+                "type": "string",
+                "description": "计划上线日期 (YYYY-MM-DD)"
+              }
+            },
+            "required": ["id", "name"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "apphunter/project_list",
+          "description": "列出所有项目，含进度百分比，支持按状态和关键词筛选",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "description": "状态筛选: planning|developing|testing|launched|archived"
+              },
+              "keyword": {
+                "type": "string",
+                "description": "关键词搜索（名称/描述）"
+              }
+            }
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "apphunter/project_get",
+          "description": "获取项目详情，含进度、关联机会信息",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "number",
+                "description": "项目 ID"
+              }
+            },
+            "required": ["id"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "apphunter/project_update",
+          "description": "更新项目字段（需要读写模式）",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "number",
+                "description": "项目 ID"
+              },
+              "name": {
+                "type": "string",
+                "description": "项目名称"
+              },
+              "description": {
+                "type": "string",
+                "description": "项目描述"
+              },
+              "tech_stack": {
+                "type": "string",
+                "description": "技术栈"
+              },
+              "target_platform": {
+                "type": "string",
+                "description": "目标平台"
+              },
+              "status": {
+                "type": "string",
+                "description": "状态: planning|developing|testing|launched|archived"
+              },
+              "planned_launch_date": {
+                "type": "string",
+                "description": "计划上线日期"
+              },
+              "actual_launch_date": {
+                "type": "string",
+                "description": "实际上线日期"
+              }
+            },
+            "required": ["id"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "apphunter/task_list",
+          "description": "列出指定里程碑下的任务（含子任务）",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "milestone_id": {
+                "type": "number",
+                "description": "里程碑 ID"
+              }
+            },
+            "required": ["milestone_id"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "apphunter/task_create",
+          "description": "在指定里程碑下创建任务（需要读写模式）",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "milestone_id": {
+                "type": "number",
+                "description": "里程碑 ID"
+              },
+              "title": {
+                "type": "string",
+                "description": "任务标题"
+              },
+              "description": {
+                "type": "string",
+                "description": "任务描述"
+              },
+              "priority": {
+                "type": "string",
+                "description": "优先级: low|medium|high|critical"
+              },
+              "due_date": {
+                "type": "string",
+                "description": "截止日期 (YYYY-MM-DD)"
+              },
+              "parent_task_id": {
+                "type": "number",
+                "description": "父任务 ID（创建子任务时使用）"
+              },
+              "requirement_id": {
+                "type": "number",
+                "description": "关联需求 ID"
+              }
+            },
+            "required": ["milestone_id", "title"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "apphunter/task_update",
+          "description": "更新任务字段（需要读写模式）",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "number",
+                "description": "任务 ID"
+              },
+              "title": {
+                "type": "string",
+                "description": "任务标题"
+              },
+              "description": {
+                "type": "string",
+                "description": "任务描述"
+              },
+              "status": {
+                "type": "string",
+                "description": "状态: todo|in_progress|done|skipped"
+              },
+              "priority": {
+                "type": "string",
+                "description": "优先级: low|medium|high|critical"
+              },
+              "due_date": {
+                "type": "string",
+                "description": "截止日期"
+              },
+              "sort_order": {
+                "type": "number",
+                "description": "排序顺序"
+              },
+              "parent_task_id": {
+                "type": "number",
+                "description": "父任务 ID"
+              }
+            },
+            "required": ["id"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "apphunter/review_list",
+          "description": "列出指定机会的差评/用户评论",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "opportunity_id": {
+                "type": "number",
+                "description": "机会 ID"
+              }
+            },
+            "required": ["opportunity_id"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "apphunter/review_create",
+          "description": "为指定机会添加差评/用户评论（需要读写模式）",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "opportunity_id": {
+                "type": "number",
+                "description": "机会 ID"
+              },
+              "content": {
+                "type": "string",
+                "description": "评论内容"
+              },
+              "reviewer_name": {
+                "type": "string",
+                "description": "评论者名称"
+              },
+              "review_date": {
+                "type": "string",
+                "description": "评论日期 (YYYY-MM-DD)"
+              },
+              "rating": {
+                "type": "number",
+                "description": "评分 (1-5)"
+              },
+              "platform": {
+                "type": "string",
+                "description": "平台"
+              },
+              "source_url": {
+                "type": "string",
+                "description": "来源 URL"
+              }
+            },
+            "required": ["opportunity_id", "content"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "apphunter/requirement_list",
+          "description": "列出指定机会的需求点",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "opportunity_id": {
+                "type": "number",
+                "description": "机会 ID"
+              },
+              "status": {
+                "type": "string",
+                "description": "状态筛选: open|converted|closed"
+              }
+            },
+            "required": ["opportunity_id"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "apphunter/requirement_create",
+          "description": "为指定机会添加需求点（需要读写模式）",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "opportunity_id": {
+                "type": "number",
+                "description": "机会 ID"
+              },
+              "title": {
+                "type": "string",
+                "description": "需求标题"
+              },
+              "description": {
+                "type": "string",
+                "description": "需求描述"
+              },
+              "type": {
+                "type": "string",
+                "description": "需求类型: feature|bug|improvement"
+              },
+              "priority": {
+                "type": "string",
+                "description": "优先级: low|medium|high|critical"
+              },
+              "mention_count": {
+                "type": "number",
+                "description": "被提及次数"
+              },
+              "source_excerpt": {
+                "type": "string",
+                "description": "来源摘录"
+              }
+            },
+            "required": ["opportunity_id", "title"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "apphunter/requirement_convert_to_task",
+          "description": "将需求转换为任务，关联到指定里程碑（需要读写模式）",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "requirement_id": {
+                "type": "number",
+                "description": "需求 ID"
+              },
+              "milestone_id": {
+                "type": "number",
+                "description": "目标里程碑 ID"
+              }
+            },
+            "required": ["requirement_id", "milestone_id"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "apphunter/milestone_list",
+          "description": "列出指定项目的里程碑，含每个里程碑下的任务列表（含子任务）",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "project_id": {
+                "type": "number",
+                "description": "项目 ID"
+              }
+            },
+            "required": ["project_id"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "apphunter/milestone_create",
+          "description": "为指定项目创建里程碑（需要读写模式）",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "project_id": {
+                "type": "number",
+                "description": "项目 ID"
+              },
+              "title": {
+                "type": "string",
+                "description": "里程碑标题"
+              },
+              "description": {
+                "type": "string",
+                "description": "里程碑描述"
+              },
+              "due_date": {
+                "type": "string",
+                "description": "截止日期 (YYYY-MM-DD)"
+              }
+            },
+            "required": ["project_id", "title"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "apphunter/milestone_update",
+          "description": "更新里程碑字段（需要读写模式）",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "number",
+                "description": "里程碑 ID"
+              },
+              "title": {
+                "type": "string",
+                "description": "里程碑标题"
+              },
+              "description": {
+                "type": "string",
+                "description": "里程碑描述"
+              },
+              "due_date": {
+                "type": "string",
+                "description": "截止日期"
+              },
+              "status": {
+                "type": "string",
+                "description": "状态: pending|in_progress|completed"
+              },
+              "sort_order": {
+                "type": "number",
+                "description": "排序顺序"
+              }
+            },
+            "required": ["id"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "apphunter/operation_list",
+          "description": "列出指定项目的运营数据记录（下载量、收入、活跃用户等）",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "project_id": {
+                "type": "number",
+                "description": "项目 ID"
+              },
+              "start_date": {
+                "type": "string",
+                "description": "开始日期 (YYYY-MM-DD)"
+              },
+              "end_date": {
+                "type": "string",
+                "description": "结束日期 (YYYY-MM-DD)"
+              }
+            },
+            "required": ["project_id"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "apphunter/operation_create",
+          "description": "录入运营数据记录（需要读写模式）",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "project_id": {
+                "type": "number",
+                "description": "项目 ID"
+              },
+              "record_date": {
+                "type": "string",
+                "description": "记录日期 (YYYY-MM-DD)"
+              },
+              "downloads": {
+                "type": "number",
+                "description": "下载量"
+              },
+              "revenue": {
+                "type": "number",
+                "description": "收入"
+              },
+              "active_users": {
+                "type": "number",
+                "description": "活跃用户数"
+              },
+              "store_rating": {
+                "type": "number",
+                "description": "商店评分"
+              },
+              "rating_count": {
+                "type": "number",
+                "description": "评分数量"
+              },
+              "notes": {
+                "type": "string",
+                "description": "备注"
+              }
+            },
+            "required": ["project_id", "record_date"]
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "apphunter/dashboard_stats",
+          "description": "获取 AppHunter 仪表板统计概览：机会数、活跃项目数、本月收入、待办里程碑、TOP3 机会、进行中项目进度",
+          "parameters": {
+            "type": "object",
+            "properties": {}
+          }
+        }
+      },
+      {
+        "type": "function",
+        "function": {
+          "name": "apphunter/search_global",
+          "description": "在 AppHunter 中全局搜索机会、项目和需求",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "keyword": {
+                "type": "string",
+                "description": "搜索关键词"
+              }
+            },
+            "required": ["keyword"]
+          }
+        }
+      }
+    ]
+  }
+}
