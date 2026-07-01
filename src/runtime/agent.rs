@@ -75,9 +75,9 @@ impl AgentRuntime {
         self.llm_connector.as_ref()
     }
     
-    /// Get a mutable reference to the tool manager
-    pub fn get_tool_manager(&mut self) -> &mut ToolManager {
-        &mut self.tool_manager
+    /// Get a reference to the tool manager
+    pub fn get_tool_manager(&self) -> &ToolManager {
+        &self.tool_manager
     }
     
     /// Get a reference to the session manager
