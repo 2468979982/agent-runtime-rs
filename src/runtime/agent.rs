@@ -68,8 +68,13 @@ impl AgentRuntime {
         self.llm_connector = Some(LLMConnector::new(&llm_config)
             .map_err(|e| RuntimeError::LLMError(e.to_string()))?);
         
+        // Register builtin tools
+        info!("Registering builtin tools...");
+        self.register_builtin_tools()?;
+        
         self.initialized = true;
         info!("AgentRuntime initialized successfully");
+        info!("Registered tools: {:?}", self.tool_manager.get_tool_names());
         
         Ok(())
     }
@@ -77,6 +82,13 @@ impl AgentRuntime {
     /// Check if runtime is initialized
     pub fn is_initialized(&self) -> bool {
         self.initialized
+    }
+    
+    /// Register builtin tools
+    fn register_builtin_tools(&mut self) -> Result<(), RuntimeError> {
+        // Use the built-in function to register all tools
+        crate::tools::builtin::register_builtin_tools(&mut self.tool_manager);
+        Ok(())
     }
     
     /// Get a reference to the LLM connector
