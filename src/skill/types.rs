@@ -326,6 +326,24 @@ impl SkillManager {
         self.skills.keys().cloned().collect()
     }
     
+    /// Find a skill by checking if the message matches any trigger
+    /// 
+    /// Returns the skill name if a match is found, otherwise None
+    pub fn find_skill_by_trigger(&self, message: &str) -> Option<String> {
+        let message_lower = message.to_lowercase();
+        
+        for (name, skill) in &self.skills {
+            // Check if any trigger matches the message
+            for trigger in &skill.metadata.triggers {
+                if message_lower.contains(&trigger.to_lowercase()) {
+                    return Some(name.clone());
+                }
+            }
+        }
+        
+        None
+    }
+    
     /// Execute a skill script
     pub async fn execute_skill(&self, skill_name: &str, script_name: &str, arguments: Option<HashMap<String, String>>) -> Result<SkillExecutionResult, String> {
         let skill = self.skills.get(skill_name)

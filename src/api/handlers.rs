@@ -98,6 +98,41 @@ pub async fn run_handler(
         })
         .collect();
     
+    // Check if any skill should be triggered
+    let skill_used = if let Some(skill_manager) = runtime.get_skill_manager() {
+        skill_manager.find_skill_by_trigger(&request.message)
+    } else {
+        None
+    };
+    
+    // If a skill is triggered, add its content to the messages
+    let messages = if let Some(ref skill_name) = skill_used {
+        tracing::info!("Skill triggered: {}", skill_name);
+        
+        // Get the skill content
+        if let Some(skill) = runtime.get_skill_manager()
+            .and_then(|sm| sm.get_skill(skill_name)) {
+            
+            // Create a system message with skill content
+            let skill_message = crate::llm::types::ChatMessage {
+                role: crate::llm::types::MessageRole::System,
+                content: format!("You have access to the following skill:\n\n{}", skill.content),
+                name: Some(format!("skill-{}", skill_name)),
+                tool_calls: None,
+                tool_call_id: None,
+            };
+            
+            // Add skill message to the beginning of the conversation
+            let mut new_messages = vec![skill_message];
+            new_messages.extend(messages);
+            new_messages
+        } else {
+            messages
+        }
+    } else {
+        messages
+    };
+    
     // Call LLM
     tracing::info!("Calling LLM with {} messages and {} tools", messages.len(), tools.len());
     let llm_response = llm_connector.chat_completion(messages, Some(tools)).await
@@ -167,7 +202,13 @@ pub async fn run_handler(
         response: response_text,
         tool_calls: tool_calls_results,
         session_id,
+        skill_used: skill_used.clone(),
     };
+    
+    // Log if a skill was used
+    if let Some(ref skill_name) = skill_used {
+        tracing::info!("Response includes skill: {}", skill_name);
+    }
     
     Ok(Json(response))
 }

@@ -27,6 +27,10 @@ pub struct RunResponse {
     
     /// Session ID for the conversation
     pub session_id: String,
+    
+    /// Name of the skill used (if any)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub skill_used: Option<String>,
 }
 
 /// Request payload for tool calls
