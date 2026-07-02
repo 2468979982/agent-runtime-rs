@@ -8,6 +8,7 @@ use axum::{
 };
 use std::sync::Arc;
 use serde_json;
+use uuid::Uuid;
 
 use crate::api::types::*;
 use crate::runtime::agent::AgentRuntime;
@@ -35,8 +36,8 @@ pub async fn run_handler(
         ));
     }
     
-    // Get session ID (create if not provided)
-    let session_id = request.session_id.unwrap_or_else(|| "default".to_string());
+    // Get session ID (use provided or generate new one)
+    let session_id = request.session_id.clone().unwrap_or_else(|| Uuid::new_v4().to_string());
     
     // Get components from runtime
     let llm_connector = runtime.get_llm_connector()
@@ -48,14 +49,12 @@ pub async fn run_handler(
     let session_manager = runtime.get_session_manager();
     
     // Get or create session
-    let _session = match session_manager.get_session(&session_id) {
-        Ok(s) => s.clone(),
-        Err(_) => {
-            // Session not found, create new one
-            session_manager.create_session()
-                .map_err(|e| ApiError::InternalServerError(format!("Failed to create session: {}", e)))?
-        }
-    };
+    // Try to get existing session, or create new one with the specified ID
+    if session_manager.get_session(&session_id).is_err() {
+        // Session not found, create new one with the specified ID
+        session_manager.create_session_with_id(session_id.clone())
+            .map_err(|e| ApiError::InternalServerError(format!("Failed to create session: {}", e)))?;
+    }
     
     // Add user message to session
     let user_message = Message {

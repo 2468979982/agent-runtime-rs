@@ -69,9 +69,17 @@ impl LLMConnector {
         &self,
         request: ChatCompletionRequest,
     ) -> Result<ChatCompletionResponse, LLMError> {
+        // Debug: print base_url
+        tracing::debug!("LLMConnector config: base_url='{}', api_key prefix={}...", 
+            self.config.base_url, 
+            &self.config.api_key[..20.min(self.config.api_key.len())]
+        );
+        
         let url = format!("{}/chat/completions", self.config.base_url.trim_end_matches('/'));
         
         info!("Sending request to: {}", url);
+        info!("Request headers: Authorization: Bearer {}...", &self.config.api_key[..20.min(self.config.api_key.len())]);
+        info!("Request body: {}", serde_json::to_string_pretty(&request).unwrap_or_default());
         
         // Build headers
         let mut headers = HeaderMap::new();
@@ -98,6 +106,7 @@ impl LLMConnector {
                 .unwrap_or_else(|_| "Unknown error".to_string());
             
             error!("LLM API error: {} - {}", status, error_text);
+            error!("Request that caused the error: {}", serde_json::to_string_pretty(&request).unwrap_or_default());
             
             return match status.as_u16() {
                 401 => Err(LLMError::AuthError(format!("Authentication failed: {}", error_text))),
@@ -107,12 +116,24 @@ impl LLMConnector {
         }
         
         // Parse response
-        let response_json: serde_json::Value = response.json().await
+        let response_text = response.text().await
             .map_err(LLMError::NetworkError)?;
         
+        info!("LLM API response status: {}", status);
+        info!("LLM API response body: {}", response_text);
+        
         // Deserialize to ChatCompletionResponse
-        let chat_response: ChatCompletionResponse = serde_json::from_value(response_json)
-            .map_err(LLMError::SerializationError)?;
+        let chat_response: ChatCompletionResponse = serde_json::from_str(&response_text)
+            .map_err(|e| {
+                error!("Failed to parse LLM response: {}", e);
+                error!("Response body: {}", response_text);
+                LLMError::SerializationError(e)
+            })?;
+        
+        info!("Parsed response: id={}, model={}, choices={}", 
+            chat_response.id, 
+            chat_response.model, 
+            chat_response.choices.len());
         
         Ok(chat_response)
     }

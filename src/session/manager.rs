@@ -37,6 +37,11 @@ impl SessionManager {
     /// 创建新会话
     pub fn create_session(&self) -> Result<Session> {
         let session_id = Uuid::new_v4().to_string();
+        self.create_session_with_id(session_id)
+    }
+    
+    /// 使用指定的 ID 创建新会话
+    pub fn create_session_with_id(&self, session_id: String) -> Result<Session> {
         let session = Session::new(session_id.clone());
 
         let mut sessions = self.sessions.lock().unwrap();

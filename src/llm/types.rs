@@ -6,10 +6,13 @@ use thiserror::Error;
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct LLMConfig {
     pub provider: String,
+    #[serde(rename = "apiKey")]
     pub api_key: String,
+    #[serde(rename = "baseURL")]
     pub base_url: String,
     pub model: String,
     pub temperature: Option<f32>,
+    #[serde(rename = "maxTokens")]
     pub max_tokens: Option<u32>,
 }
 

@@ -34,6 +34,7 @@ pub struct ToolsConfigAgent {
 pub struct LLMConfig {
     pub provider: LLMProvider,
     pub api_key: String,
+    #[serde(rename = "baseURL")]
     pub base_url: Option<String>,
     pub model: String,
     pub temperature: Option<f32>,

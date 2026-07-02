@@ -8,8 +8,11 @@ use std::net::SocketAddr;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Initialize logger
-    logger::init_logger("info")?;
+    // Load .env file
+    dotenvy::dotenv().ok();
+    
+    // Initialize logger (set to debug for troubleshooting)
+    logger::init_logger("debug")?;
     
     tracing::info!("Agent Runtime RS starting...");
     

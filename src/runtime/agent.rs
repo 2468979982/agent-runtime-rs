@@ -46,11 +46,20 @@ impl AgentRuntime {
         let agent_config = ConfigLoader::load_agent_config(agent_config_path)
             .map_err(|e| RuntimeError::ConfigError(e.to_string()))?;
         
+        // Debug: print LLM config
+        tracing::debug!("LLM config from agent-config.json: api_key prefix={}..., base_url={:?}, model={}",
+            &agent_config.llm.api_key[..20.min(agent_config.llm.api_key.len())],
+            agent_config.llm.base_url,
+            agent_config.llm.model
+        );
+        
         // Initialize LLM connector
         let llm_config = crate::llm::types::LLMConfig {
             provider: "openai".to_string(),
             api_key: agent_config.llm.api_key.clone(),
-            base_url: agent_config.llm.base_url.clone().unwrap_or_default(),
+            base_url: agent_config.llm.base_url.clone().ok_or_else(|| {
+                RuntimeError::ConfigError("base_url is required in LLM config".to_string())
+            })?,
             model: agent_config.llm.model,
             temperature: agent_config.llm.temperature,
             max_tokens: agent_config.llm.max_tokens,

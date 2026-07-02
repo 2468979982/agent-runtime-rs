@@ -10,7 +10,20 @@ pub struct ConfigLoader;
 impl ConfigLoader {
     /// Load and parse agent configuration file
     pub fn load_agent_config<P: AsRef<Path>>(path: P) -> Result<AgentConfig, ConfigError> {
-        let config: AgentConfig = Self::load_and_parse(path)?;
+        // Load as raw JSON value (to support ${ENV:...} substitution)
+        let mut config_value: serde_json::Value = Self::load_and_parse_json(path)?;
+        
+        tracing::debug!("Config before env substitution: {}", config_value);
+        
+        // Substitute environment variables
+        Self::substitute_env_variables(&mut config_value)?;
+        
+        tracing::debug!("Config after env substitution: {}", config_value);
+        
+        // Convert to AgentConfig
+        let config: AgentConfig = serde_json::from_value(config_value)
+            .map_err(|e| ConfigError::JsonParseError(e.to_string()))?;
+        
         Self::validate_agent_config(&config)?;
         Ok(config)
     }
