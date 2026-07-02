@@ -15,31 +15,30 @@
 - 🚀 **高性能**: Rust + Axum 提供高并发和低延迟
 - 🔒 **类型安全**: 利用 Rust 的类型系统在编译时捕获错误
 - 🛡️ **内存安全**: 没有段错误、缓冲区溢出或悬空指针
-- 🧰 **模块化设计**: 清晰的模块分离（LLM、工具、会话、技能、MCP）
+- 🧩 **模块化设计**: 清晰的模块分离（LLM、工具、会话、技能、MCP）
 - 🔌 **MCP 集成**: 支持 Model Context Protocol (MCP) 通过 stdio 通信
-- 📁 **技能系统**: 从 Markdown 文件加载技能，并注册为工具
+- 📚 **技能系统**: 从 Markdown 文件加载技能（支持 YAML frontmatter）
 - 🌐 **HTTP API**: RESTful API 使用 Axum (类似 Express)
-- 📊 **全面测试**: 153 个测试全部通过
+- 📊 **全面测试**: 153 个测试全部通过（11 个集成测试）
 
 ---
 
-## 📊 项目结构
+## 📂 项目结构
 
 ```
 agent-runtime-rs/
 ├── src/
-│   ├── config/          # 配置加载 (JSON)
-│   │   ├── loader.rs     # ConfigLoader
+│   ├── config/          # 配置加载 (JSON + 环境变量)
+│   │   ├── loader.rs     # ConfigLoader (支持 ${ENV:VAR} 替换)
 │   │   ├── types.rs     # 配置类型定义
 │   │   └── mod.rs
 │   ├── llm/             # LLM 集成
-│   │   ├── connector.rs  # LLMConnector (通义千问)
-│   │   ├── client.rs     # HTTP 客户端 (可选)
-│   │   ├── types.rs     # LLM 类型定义
+│   │   ├── connector.rs  # LLMConnector (通义千问 qwen-plus)
+│   │   ├── types.rs     # LLM 类型定义 (ChatMessage, ToolDefinition)
 │   │   └── mod.rs
 │   ├── tools/           # 工具管理
 │   │   ├── manager.rs    # ToolManager
-│   │   ├── types.rs      # 工具类型定义
+│   │   ├── types.rs      # 工具类型定义 (ToolExecutor, ToolResult)
 │   │   ├── builtin/      # 内置工具
 │   │   │   ├── calculator.rs
 │   │   │   ├── file_reader.rs
@@ -49,44 +48,46 @@ agent-runtime-rs/
 │   │   │   ├── file_deleter.rs
 │   │   │   ├── directory_creator.rs
 │   │   │   ├── get_current_time.rs
+│   │   │   ├── mcp_tool_executor.rs  # MCP 工具适配器
 │   │   │   └── mod.rs
 │   │   └── mod.rs
 │   ├── session/         # 会话管理
-│   │   ├── manager.rs    # SessionManager
-│   │   ├── types.rs      # 会话类型定义
+│   │   ├── manager.rs    # SessionManager (UUID, TTL, 历史限制)
+│   │   ├── types.rs      # 会话类型定义 (Message, MessageRole)
+│   │   ├── store.rs      # 可选持久化存储
 │   │   └── mod.rs
 │   ├── mcp/             # MCP 集成
 │   │   ├── client.rs      # MCPClient trait
-│   │   ├── stdio_client.rs # MCPStdioClient
+│   │   ├── stdio_client.rs # MCPStdioClient (JSON-RPC 2.0)
 │   │   ├── config.rs     # MCP 配置加载
-│   │   ├── types.rs      # MCP 类型定义 (JSON-RPC 2.0)
+│   │   ├── types.rs      # MCP 类型定义 (InitializeResult, Tool)
 │   │   └── mod.rs
-│   ├── skills/          # 技能系统
-│   │   ├── loader.rs     # SkillLoader
-│   │   ├── reference_tool.rs # 技能引用工具
-│   │   ├── types.rs      # 技能类型定义
+│   ├── skill/           # 技能系统
+│   │   ├── types.rs      # Skill, SkillMetadata, SkillManager
 │   │   └── mod.rs
 │   ├── runtime/         # 核心运行时
-│   │   ├── agent.rs      # AgentRuntime
-│   │   ├── types.rs      # 运行时类型定义
+│   │   ├── agent.rs      # AgentRuntime (协调所有组件)
 │   │   └── mod.rs
 │   ├── api/             # HTTP API (Axum)
-│   │   ├── handlers.rs   # 请求处理器
+│   │   ├── handlers.rs   # 请求处理器 (run, tool-call, sessions)
+│   │   ├── skill_handlers.rs  # 技能管理 API
 │   │   ├── middleware.rs # 中间件 (CORS, logging)
 │   │   ├── routes.rs     # 路由定义
 │   │   ├── types.rs      # API 请求/响应类型
-│   │   └── mod.rs
-│   ├── utils/           # 工具类
-│   │   ├── logger.rs     # 日志 (tracing)
 │   │   └── mod.rs
 │   ├── error.rs         # 全局错误类型
 │   ├── lib.rs           # 库入口
 │   └── main.rs          # 可执行文件入口
 ├── config/              # 配置文件
-│   ├── agent-config.json
-│   ├── tools-config.json
-│   └── prompt-config.json
-├── skills/              # 技能文件夹 (Markdown)
+│   ├── agent-config.json   # LLM 配置 (支持 ${ENV:...})
+│   ├── tools-config.json   # 工具 + MCP 服务器配置
+│   └── prompt-config.json  # 提示词配置
+├── skills/              # 技能文件夹 (Markdown + YAML frontmatter)
+│   ├── find-skills.md
+│   ├── frontend-design.md
+│   └── frontend-design/
+│       └── SKILL.md
+├── .env.example        # 环境变量示例
 ├── Cargo.toml          # Rust 项目配置
 ├── Cargo.lock          # 依赖锁定文件
 └── README.md           # 本文档
@@ -100,7 +101,7 @@ agent-runtime-rs/
 
 - Rust 1.75+ (安装: https://rustup.rs/)
 - Cargo (Rust 包管理器)
-- 通义千问 API Key (可选，用于 LLM 集成)
+- 通义千问 API Key (或使用 OpenAI 兼容 API)
 
 ### 安装
 
@@ -118,28 +119,69 @@ cargo build --release
 
 ### 配置
 
-1. **复制配置文件**:
-   ```bash
-   cp config/agent-config.json.example config/agent-config.json
-   cp config/tools-config.json.example config/tools-config.json
-   cp config/prompt-config.json.example config/prompt-config.json
-   ```
+#### 1. 环境变量配置 (推荐)
 
-2. **设置环境变量**:
-   ```bash
-   # 创建 .env 文件
-   echo "QWEN_API_KEY=your_api_key_here" > .env
-   ```
+创建 `.env` 文件：
 
-3. **编辑配置文件** (根据需要):
-   - `config/agent-config.json` - LLM 配置
-   - `config/tools-config.json` - 工具配置
-   - `config/prompt-config.json` - 提示词配置
+```bash
+# .env
+OPENAI_API_KEY=sk-gw-xxx
+OPENAI_BASE_URL=https://openai.u2o6.com/v1
+OPENAI_MODEL=qwen-plus
+PORT=3000
+```
+
+#### 2. 配置文件 (可选)
+
+编辑 `config/agent-config.json`：
+
+```json
+{
+  "llm": {
+    "provider": "openaicompatible",
+    "apiKey": "${ENV:OPENAI_API_KEY}",
+    "baseURL": "${ENV:OPENAI_BASE_URL}",
+    "model": "qwen-plus",
+    "temperature": 0.7,
+    "maxTokens": 10000,
+    "mock": false
+  },
+  "session": {
+    "maxHistoryLength": 100,
+    "sessionTTL": 3600
+  },
+  "tools": {
+    "builtinTools": ["calculator", "get_current_time", "read_file", "write_file", "edit_file", "list_files", "create_directory", "delete_file"],
+    "autoExecuteTools": true,
+    "sandboxDir": "./data"
+  },
+  "skills": {
+    "autoLoadSkills": true,
+    "skillsFolder": "./skills"
+  }
+}
+```
+
+#### 3. MCP 服务器配置 (可选)
+
+编辑 `config/tools-config.json`：
+
+```json
+{
+  "mcpServers": {
+    "apphunter": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-apphunter"],
+      "env": {}
+    }
+  }
+}
+```
 
 ### 运行
 
 ```bash
-# 运行服务器 (默认端口 3000)
+# 加载 .env 并运行服务器 (默认端口 3000)
 cargo run
 
 # 或运行 release 版本
@@ -152,9 +194,19 @@ cargo run
 
 ## 📡 API 文档
 
-### 端点
+### 基础 URL
 
-#### 1. **运行 Agent**
+```
+http://localhost:3000/api
+```
+
+---
+
+### 1. **运行 Agent** `POST /api/run`
+
+运行 Agent 并处理用户消息。
+
+**请求**:
 ```http
 POST /api/run
 Content-Type: application/json
@@ -168,15 +220,20 @@ Content-Type: application/json
 **响应**:
 ```json
 {
-  "response": "Hello there!",
+  "response": "Hello there! How can I help you today?",
   "tool_calls": [],
-  "session_id": "session-123"
+  "session_id": "session-123",
+  "finish_reason": "stop"
 }
 ```
 
 ---
 
-#### 2. **执行工具调用**
+### 2. **执行工具调用** `POST /api/tool-call`
+
+直接执行工具（内置工具或 MCP 工具）。
+
+**请求**:
 ```http
 POST /api/tool-call
 Content-Type: application/json
@@ -192,15 +249,17 @@ Content-Type: application/json
 **响应**:
 ```json
 {
-  "result": {"value": 5},
   "success": true,
+  "output": "5",
   "error": null
 }
 ```
 
 ---
 
-#### 3. **列出所有会话**
+### 3. **列出所有会话** `GET /api/sessions`
+
+**请求**:
 ```http
 GET /api/sessions
 ```
@@ -209,87 +268,253 @@ GET /api/sessions
 ```json
 {
   "sessions": ["session-1", "session-2"],
-  "total": 2
+  "count": 2
 }
 ```
 
 ---
 
-#### 4. **获取会话详情**
+### 4. **获取会话详情** `GET /api/sessions/:session_id`
+
+**请求**:
 ```http
-GET /api/sessions/:session_id
+GET /api/sessions/session-123
 ```
 
 **响应**:
 ```json
 {
-  "session_id": "session-1",
-  "history": [...],
-  "metadata": {...}
+  "session_id": "session-123",
+  "history": [
+    {
+      "role": "user",
+      "content": "Hello!",
+      "name": null,
+      "tool_calls": null,
+      "tool_call_id": null
+    },
+    {
+      "role": "assistant",
+      "content": "Hi there!",
+      "name": null,
+      "tool_calls": null,
+      "tool_call_id": null
+    }
+  ],
+  "metadata": {}
 }
 ```
 
 ---
 
-#### 5. **删除会话**
+### 5. **删除会话** `DELETE /api/sessions/:session_id`
+
+**请求**:
 ```http
-DELETE /api/sessions/:session_id
+DELETE /api/sessions/session-123
 ```
 
 **响应**: `204 No Content`
 
 ---
 
-#### 6. **健康检查**
+### 6. **列出所有技能** `GET /api/skills` 🆕
+
+列出所有已加载的技能。
+
+**请求**:
+```http
+GET /api/skills
+```
+
+**响应**:
+```json
+{
+  "skills": [
+    {
+      "name": "frontend-design",
+      "description": "Generate frontend UI designs with HTML/CSS/JavaScript",
+      "version": "1.0.0",
+      "author": "Agent Runtime RS",
+      "triggers": ["design UI", "create frontend", "build interface"],
+      "tags": ["frontend", "design", "UI", "HTML", "CSS"],
+      "script_count": 2
+    }
+  ],
+  "count": 1
+}
+```
+
+---
+
+### 7. **获取技能详情** `GET /api/skills/:skill_name` 🆕
+
+获取特定技能的详细信息。
+
+**请求**:
+```http
+GET /api/skills/frontend-design
+```
+
+**响应**:
+```json
+{
+  "name": "frontend-design",
+  "description": "Generate frontend UI designs with HTML/CSS/JavaScript",
+  "version": "1.0.0",
+  "author": "Agent Runtime RS",
+  "triggers": ["design UI", "create frontend", "build interface", "frontend design"],
+  "required_tools": ["file_writer", "file_reader"],
+  "tags": ["frontend", "design", "UI", "HTML", "CSS"],
+  "scripts": [
+    {
+      "name": "script_1",
+      "description": "Auto-extracted script",
+      "language": "bash",
+      "auto_execute": false
+    }
+  ],
+  "content": "# Frontend Design Skill\n\nThis skill helps generate frontend UI designs..."
+}
+```
+
+---
+
+### 8. **健康检查** `GET /api/health`
+
+**请求**:
 ```http
 GET /api/health
 ```
 
-**响应**: `200 OK`
+**响应**:
+```json
+{
+  "status": "healthy",
+  "timestamp": "2026-07-03T04:00:00Z",
+  "version": "0.1.0"
+}
+```
 
 ---
 
 ## 🧰 内置工具
 
-Agent Runtime RS 提供以下内置工具：
+Agent Runtime RS 提供以下 **8 个内置工具**：
 
 | 工具 | 描述 | 示例 |
 |------|------|------|
 | **calculator** | 数学计算 | `2 + 3 * 4` |
-| **file_reader** | 读取文件 | `path/to/file.txt` |
-| **file_writer** | 写入文件 | `content="Hello"` |
-| **file_editor** | 编辑文件 (正则表达式) | `s/foo/bar/g` |
+| **get_current_time** | 获取当前时间 | - |
+| **file_reader** | 读取文件内容 | `path/to/file.txt` |
+| **file_writer** | 写入文件 | `content="Hello", path="output.txt"` |
+| **file_editor** | 编辑文件 (正则表达式替换) | `s/foo/bar/g` |
 | **file_lister** | 列出目录内容 | `path/to/dir` |
 | **file_deleter** | 删除文件/目录 | `path/to/file.txt` |
 | **directory_creator** | 创建目录 | `path/to/dir` |
-| **get_current_time** | 获取当前时间 | - |
 
 ---
 
-## 📁 技能系统
+## 📚 技能系统
 
 技能是从 Markdown 文件加载的可复用知识模块。
 
-### 创建技能
+### 技能文件格式
 
-1. 在 `skills/` 目录中创建新的 `.md` 文件：
-   ```markdown
-   ---
-   id: my-skill
-   name: My Skill
-   description: This is my custom skill
-   author: Your Name
-   version: 1.0.0
-   ---
-   
-   # My Skill
-   
-   This is the content of my skill...
-   ```
+技能使用 **Markdown + YAML frontmatter** 格式：
 
-2. 重启服务器（或使用热加载，如果已实现）
+```markdown
+---
+name: frontend-design
+description: Generate frontend UI designs with HTML/CSS/JavaScript
+version: 1.0.0
+author: Agent Runtime RS
+triggers:
+  - design UI
+  - create frontend
+  - build interface
+  - frontend design
+tags:
+  - frontend
+  - design
+  - UI
+  - HTML
+  - CSS
+required_tools:
+  - file_writer
+  - file_reader
+---
 
-3. 技能将自动注册为工具，名称为 `skill/<skill_id>`
+# Frontend Design Skill
+
+This skill helps you generate frontend UI designs...
+
+## Usage
+
+To use this skill, describe the UI you want to create...
+
+## Example
+
+Here's an example login page:
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+    </style>
+</head>
+<body>
+    <form>
+        <input type="text" placeholder="Username">
+        <input type="password" placeholder="Password">
+        <button>Login</button>
+    </form>
+</body>
+</html>
+```
+
+## Scripts
+
+You can also include executable scripts:
+
+```bash
+# Create a new HTML file
+echo "<!DOCTYPE html>" > index.html
+```
+
+```python
+# Generate CSS from design tokens
+import json
+# ... Python code ...
+```
+```
+
+### 技能目录结构
+
+```
+skills/
+├── find-skills.md          # 技能文件 (直接放在 skills/ 下)
+├── frontend-design.md      # 技能文件
+└── frontend-design/        # 或使用子目录
+    └── SKILL.md           # 技能文件 (子目录中的 SKILL.md)
+```
+
+### 加载技能
+
+1. 将技能文件放入 `skills/` 目录
+2. 重启服务器（或实现热加载）
+3. 技能将自动加载并可通过 `GET /api/skills` 查看
+
+### 使用技能
+
+由于架构限制，技能执行暂不支持通过 API 调用。建议的使用方式：
+
+1. 通过 `GET /api/skills/:name` 获取技能详情
+2. 读取技能 Markdown 文件
+3. 根据技能文档手动执行脚本或操作
 
 ---
 
@@ -304,21 +529,38 @@ Agent Runtime RS 支持 Model Context Protocol (MCP)，允许通过 stdio 与 MC
 ```json
 {
   "mcpServers": {
-    "my-mcp-server": {
-      "command": "node",
-      "args": ["path/to/mcp-server.js"],
-      "env": {
-        "API_KEY": "your_key"
-      }
+    "apphunter": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-apphunter"],
+      "env": {}
     }
   }
 }
 ```
 
+### 工作原理
+
 Agent Runtime 将自动：
-1. 启动 MCP 服务器子进程
+
+1. 启动 MCP 服务器子进程 (通过 `command` + `args`)
 2. 通过 stdin/stdout 进行 JSON-RPC 2.0 通信
-3. 加载 MCP 工具并注册到 ToolManager
+3. 调用 `initialize()` 方法初始化 MCP 连接
+4. 调用 `tools/list` 获取 MCP 服务器提供的工具
+5. 将 MCP 工具注册到 ToolManager (作为 `MCPToolExecutor`)
+6. 当工具被调用时，通过 `tools/call` 转发到 MCP 服务器
+
+### 示例：apphunter MCP 服务器
+
+当前配置已集成 **apphunter** MCP 服务器，提供 24 个工具：
+
+- `opportunity_list` - 列出商机
+- `opportunity_create` - 创建商机
+- `opportunity_update` - 更新商机
+- `project_list` - 列出项目
+- `task_list` - 列出任务
+- ... (共 24 个工具)
+
+这些工具会作为普通工具注册，可通过 `POST /api/tool-call` 调用。
 
 ---
 
@@ -332,9 +574,13 @@ cargo test
 cargo test --lib config::
 cargo test --lib llm::
 cargo test --lib tools::
+cargo test --lib session::
+cargo test --lib mcp::
+cargo test --lib skill::
 
 # 运行集成测试
 cargo test --test llm_integration_test
+cargo test --test api_integration_test
 
 # 检查测试覆盖率 (需要 nightly Rust)
 cargo +nightly test --flags="--coverage"
@@ -342,6 +588,9 @@ cargo +nightly test --flags="--coverage"
 
 **测试结果**:
 - ✅ **153 个测试**全部通过
+  - 141 个单元测试
+  - 11 个集成测试
+  - 1 个文档测试
 - ✅ **0 失败**
 - ✅ **代码覆盖率** > 80% (估计)
 
@@ -357,11 +606,14 @@ cargo +nightly test --flags="--coverage"
 | `tokio` | 1.0 | 异步运行时 |
 | `serde` / `serde_json` | 1.0 | 序列化/反序列化 |
 | `async-openai` | 0.18 | OpenAI API (通义千问兼容) |
-| `tower-http` | 0.5 | HTTP 中间件 (CORS) |
+| `tower-http` | 0.5 | HTTP 中间件 (CORS, Trace) |
 | `tracing` | 0.1 | 日志 |
 | `thiserror` | 1.0 | 错误处理 |
 | `uuid` | 1.0 | UUID 生成 |
 | `chrono` | 0.4 | 时间处理 |
+| `dotenvy` | 0.15 | 加载 .env 文件 |
+| `walkdir` | 2.5 | 递归遍历目录 (技能加载) |
+| `tokio-process` | - | 子进程管理 (MCP) |
 
 完整依赖列表请查看 `Cargo.toml`。
 
@@ -402,9 +654,19 @@ cargo fmt
 cargo udeps
 ```
 
+### 调试
+
+```bash
+# 设置日志级别
+RUST_LOG=debug cargo run
+
+# 或使用 .env 文件
+echo "RUST_LOG=debug" >> .env
+```
+
 ---
 
-## 📊 性能对比
+## 📊 性能对比 (估算)
 
 | 指标 | TypeScript 版本 | Rust 版本 | 改进 |
 |------|-----------------|-------------|------|
@@ -449,6 +711,7 @@ cargo udeps
 - Axum 框架: https://github.com/tokio-rs/axum
 - Tokio 异步运行时: https://tokio.rs/
 - Rust 社区: https://www.rust-lang.org/community
+- MCP (Model Context Protocol): https://modelcontextprotocol.io/
 
 ---
 
@@ -463,17 +726,30 @@ cargo udeps
 ## 🗺️ 路线图
 
 - [x] **阶段 1**: 配置加载 + 类型定义
-- [x] **阶段 2**: 工具管理器 + 内置工具
-- [x] **阶段 3**: LLM 连接器 (通义千问)
-- [x] **阶段 4**: 会话管理器
-- [x] **阶段 5**: MCP 集成
-- [x] **阶段 6**: 技能系统
+- [x] **阶段 2**: 工具管理器 + 内置工具 (8 个)
+- [x] **阶段 3**: LLM 连接器 (通义千问 qwen-plus)
+- [x] **阶段 4**: 会话管理器 (UUID, TTL, 历史)
+- [x] **阶段 5**: MCP 集成 (JSON-RPC 2.0, stdio)
+- [x] **阶段 6**: 技能系统 (Markdown + YAML)
 - [x] **阶段 7**: 核心运行时 (AgentRuntime)
-- [x] **阶段 8**: HTTP API 服务器 (Axum)
-- [ ] **阶段 9**: Docker 镜像
-- [ ] **阶段 10**: 性能优化
-- [ ] **阶段 11**: 文档完善
+- [x] **阶段 8**: HTTP API 服务器 (Axum) + 技能管理 API
+- [ ] **阶段 9**: OpenAPI/Swagger 文档 (utoipa 集成进行中)
+- [ ] **阶段 10**: Docker 镜像
+- [ ] **阶段 11**: 性能优化 (异步改进)
 - [ ] **阶段 12**: 生产部署指南
+- [ ] **阶段 13**: 技能执行 API (需要解决 Arc 可变访问问题)
+- [ ] **阶段 14**: 技能热重载
+- [ ] **阶段 15**: Web UI (可选)
+
+---
+
+## 📚 相关文档
+
+- [Task Artifact: Rust Porting](./TASK_ARTIFACT_RUST_PORTING.md) - Rust 移植完整记录
+- [Task Artifact: LLM Config Fix](./TASK_ARTIFACT_LLM_CONFIG_FIX.md) - LLM 配置加载修复
+- [Task Artifact: Tool Registration Fix](./TASK_ARTIFACT_TOOL_REGISTRATION_FIX.md) - 工具注册修复
+- [Task Artifact: MCP Integration](./TASK_ARTIFACT_MCP_INTEGRATION.md) - MCP 集成详解
+- [Task Artifact: Skill System](./TASK_ARTIFACT_SKILL_SYSTEM.md) - 技能系统实现
 
 ---
 
