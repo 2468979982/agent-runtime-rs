@@ -38,5 +38,10 @@
     "builtinSkills": [
       "frontend-design"
     ]
+  },
+  "configSummaryThreshold": 50000,
+  "notes": {
+    "configSummaryThreshold": "Token threshold for generating config summary. If config content (in bytes) exceeds this value, a summary will be generated via LLM to reduce token consumption. Set to 0 to always generate summary, or set to a very large value to never generate summary.",
+    "example": "For example, if config content is 250KB (250000 bytes) and threshold is 50000, a summary will be generated. If config content is 3KB (3000 bytes) and threshold is 5000, full config will be used without summary generation."
   }
 }

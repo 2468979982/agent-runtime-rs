@@ -23,6 +23,9 @@ pub struct AgentRuntime {
     
     // Agent configuration content (loaded from agent-config/ directory)
     agent_config_content: Option<String>,
+    
+    // Config summary threshold (from config/agent-config.json)
+    config_summary_threshold: usize,
 }
 
 impl AgentRuntime {
@@ -41,6 +44,7 @@ impl AgentRuntime {
             logger,
             initialized: false,
             agent_config_content: None,  // Initialize as None
+            config_summary_threshold: 5000,  // Default threshold: 5000 bytes
         }
     }
     
@@ -56,6 +60,9 @@ impl AgentRuntime {
         // Load agent config
         let agent_config = ConfigLoader::load_agent_config(agent_config_path)
             .map_err(|e| RuntimeError::ConfigError(e.to_string()))?;
+        
+        // Read configSummaryThreshold from config file (optional field)
+        self.load_config_summary_threshold(agent_config_path).await?;
         
         // Debug: print LLM config
         tracing::debug!("LLM config from agent-config.json: api_key prefix={}..., base_url={:?}, model={}",
@@ -115,6 +122,58 @@ impl AgentRuntime {
         // Load agent-config/ files (SOUL.md, IDENTITY.md, AGENTS.md, etc.)
         info!("Loading agent-config files...");
         self.load_agent_config_files();
+        
+        // Generate summary of agent-config using LLM (optimization: reduce token usage)
+        if let Some(ref config_content) = self.agent_config_content {
+            let content_len = config_content.len();
+            
+            if content_len > self.config_summary_threshold && self.config_summary_threshold > 0 {
+                info!("Generating summary of agent-config (original: {} bytes, threshold: {} bytes)", 
+                    content_len, self.config_summary_threshold);
+                
+                if let Some(llm_connector) = &self.llm_connector {
+                    let summary_prompt = format!(
+                        "Please summarize the following agent configuration in 500-1000 words. \
+                         Focus on the key aspects: personality, identity, workspace, and behavior guidelines. \
+                         Keep the summary concise but informative.\n\nConfig content:\n\n{}",
+                        config_content
+                    );
+                    
+                    let summary_messages = vec![crate::llm::types::ChatMessage {
+                        role: crate::llm::types::MessageRole::User,
+                        content: summary_prompt,
+                        name: None,
+                        tool_calls: None,
+                        tool_call_id: None,
+                    }];
+                    
+                    // Don't pass tools or tool_choice (summary generation doesn't need tools)
+                    match llm_connector.chat_completion(summary_messages, None).await {
+                        Ok(response) => {
+                            if let Some(choice) = response.choices.first() {
+                                let summary = choice.message.content.clone();
+                                info!("Agent config summary generated ({} bytes, saved {}%)", 
+                                    summary.len(), 
+                                    (content_len - summary.len()) * 100 / content_len
+                                );
+                                self.agent_config_content = Some(summary);
+                            }
+                        }
+                        Err(e) => {
+                            warn!("Failed to generate agent-config summary: {}. Using full config.", e);
+                            // Keep full config (self.agent_config_content already set)
+                        }
+                    }
+                }
+            } else {
+                if self.config_summary_threshold == 0 {
+                    info!("Config summary generation skipped (threshold is 0, always use full config)");
+                } else {
+                    info!("Config content ({} bytes) is below threshold ({} bytes), using full config", 
+                        content_len, self.config_summary_threshold);
+                }
+            }
+        }
         
         self.initialized = true;
         info!("AgentRuntime initialized successfully");
@@ -208,6 +267,32 @@ impl AgentRuntime {
     /// Get a reference to the skill manager
     pub fn get_skill_manager(&self) -> Option<&SkillManager> {
         self.skill_manager.as_ref()
+    }
+    
+    /// Load config_summary_threshold from config file (optional field)
+    async fn load_config_summary_threshold(&mut self, config_path: &str) -> Result<(), RuntimeError> {
+        match std::fs::read_to_string(config_path) {
+            Ok(content) => {
+                match serde_json::from_str::<serde_json::Value>(&content) {
+                    Ok(json) => {
+                        if let Some(threshold) = json.get("configSummaryThreshold").and_then(|v| v.as_u64()) {
+                            self.config_summary_threshold = threshold as usize;
+                            info!("Loaded configSummaryThreshold from {}: {} bytes", config_path, self.config_summary_threshold);
+                        } else {
+                            warn!("configSummaryThreshold not found in {}, using default: 5000 bytes", config_path);
+                        }
+                    }
+                    Err(e) => {
+                        warn!("Failed to parse {}: {}, using default threshold", config_path, e);
+                    }
+                }
+            }
+            Err(e) => {
+                warn!("Failed to load {}: {}, using default threshold", config_path, e);
+            }
+        }
+        
+        Ok(())
     }
     
     /// Load agent-config/ files and combine them into agent_config_content
