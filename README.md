@@ -205,9 +205,26 @@ cargo run
 
 # 或运行 release 版本
 ./target/release/agent-runtime-rs
+```n
+服务器启动后，可以访问 `http://localhost:3000/api/health` 检查健康状态。
+
+### 🤖 Agent 配置 (可选)
+
+自定义 Agent 人格、身份、工作区等：
+
+```bash
+# 复制配置模板
+cp -r examples/agent-config ./agent-config
+
+# 修改配置文件
+vim agent-config/SOUL.md  # 修改人格定义
+vim agent-config/IDENTITY.md  # 修改身份定义
+
+# 重启服务器
+cargo run
 ```
 
-服务器启动后，可以访问 `http://localhost:3000/api/health` 检查健康状态。
+详细文档请查看 [Agent 配置](#-agent-配置-agent-config) 部分。
 
 ---
 
@@ -991,13 +1008,15 @@ echo "RUST_LOG=debug" >> .env
 - [x] **阶段 6**: 技能系统 (Markdown + YAML)
 - [x] **阶段 7**: 核心运行时 (AgentRuntime)
 - [x] **阶段 8**: HTTP API 服务器 (Axum) + 技能管理 API
+- [x] **阶段 8.5**: Agent 配置系统 (agent-config/) - 自动加载 + 按需加载 🆕
 - [ ] **阶段 9**: OpenAPI/Swagger 文档 (utoipa 集成进行中)
 - [ ] **阶段 10**: Docker 镜像
 - [ ] **阶段 11**: 性能优化 (异步改进)
 - [ ] **阶段 12**: 生产部署指南
 - [ ] **阶段 13**: 技能执行 API (需要解决 Arc 可变访问问题)
 - [ ] **阶段 14**: 技能热重载
-- [ ] **阶段 15**: Web UI (可选)
+- [ ] **阶段 15**: Agent 配置热重载 🆕
+- [ ] **阶段 16**: Web UI (可选)
 
 ---
 
