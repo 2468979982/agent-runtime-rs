@@ -18,6 +18,7 @@
 - 🧩 **模块化设计**: 清晰的模块分离（LLM、工具、会话、技能、MCP）
 - 🔌 **MCP 集成**: 支持 Model Context Protocol (MCP) 通过 stdio 通信
 - 📚 **技能系统**: 从 Markdown 文件加载技能（支持 YAML frontmatter）
+- 🤖 **Agent 配置**: 通过 `agent-config/` 目录配置人格、身份、工作区（自动加载 + 按需加载） 🆕
 - 🌐 **HTTP API**: RESTful API 使用 Axum (类似 Express)
 - 📊 **全面测试**: 153 个测试全部通过（11 个集成测试）
 
@@ -82,11 +83,29 @@ agent-runtime-rs/
 │   ├── agent-config.json   # LLM 配置 (支持 ${ENV:...})
 │   ├── tools-config.json   # 工具 + MCP 服务器配置
 │   └── prompt-config.json  # 提示词配置
+├── agent-config/        # 🆕 Agent 配置文件 (启动时自动加载)
+│   ├── SOUL.md          # 人格定义（活泼、严肃、幽默等）
+│   ├── IDENTITY.md      # 身份定义（名称、Emoji、Vibe）
+│   ├── AGENTS.md        # 工作区定义和启动指令
+│   ├── MEMORY.md        # 长期记忆（用户信息、项目上下文）
+│   ├── USER.md          # 用户信息（偏好、工作风格）
+│   ├── TOOLS.md         # 工具使用说明和本地配置
+│   └── HEARTBEAT.md     # 心跳检查任务列表
 ├── skills/              # 技能文件夹 (Markdown + YAML frontmatter)
 │   ├── find-skills.md
 │   ├── frontend-design.md
 │   └── frontend-design/
 │       └── SKILL.md
+├── examples/            # 🆕 示例和模板
+│   └── agent-config/    # Agent 配置模板（供用户参考）
+│       ├── SOUL.md      # 人格定义模板（含注释）
+│       ├── IDENTITY.md  # 身份定义模板（含注释）
+│       ├── AGENTS.md    # 工作区模板
+│       ├── MEMORY.md    # 长期记忆模板
+│       ├── USER.md      # 用户信息模板
+│       ├── TOOLS.md     # 工具配置模板
+│       ├── HEARTBEAT.md # 心跳任务模板
+│       └── README.md    # 使用指南
 ├── .env.example        # 环境变量示例
 ├── Cargo.toml          # Rust 项目配置
 ├── Cargo.lock          # 依赖锁定文件
@@ -515,6 +534,245 @@ skills/
 1. 通过 `GET /api/skills/:name` 获取技能详情
 2. 读取技能 Markdown 文件
 3. 根据技能文档手动执行脚本或操作
+
+---
+
+## 🤖 Agent 配置 (agent-config/)
+
+Agent Runtime RS 支持通过 `agent-config/` 目录配置 Agent 的人格、身份、工作区等。
+
+### 📋 配置文件
+
+在 `agent-config/` 目录中放置以下配置文件：
+
+| 文件 | 用途 | 加载时机 |
+|------|------|----------|
+| `SOUL.md` | 人格定义（活泼、严肃、幽默等） | **启动时自动加载** ✅ |
+| `IDENTITY.md` | 身份定义（名称、Emoji、Vibe） | **启动时自动加载** ✅ |
+| `AGENTS.md` | 工作区定义和启动指令 | **启动时自动加载** ✅ |
+| `MEMORY.md` | 长期记忆（用户信息、项目上下文） | **按需加载** (Skill) |
+| `USER.md` | 用户信息（偏好、工作风格） | **按需加载** (Skill) |
+| `TOOLS.md` | 工具使用说明和本地配置 | **按需加载** (Skill) |
+| `HEARTBEAT.md` | 心跳检查任务列表 | **按需加载** (Skill) |
+
+---
+
+### 🚀 自动加载（方式 2）
+
+**默认启用**：启动时自动读取 `agent-config/` 目录中的文件，并注入到 LLM 系统提示中。
+
+**工作原理**：
+1. 服务器启动时，`AgentRuntime::initialize()` 调用 `load_agent_config_files()`
+2. 读取 `agent-config/SOUL.md`、`IDENTITY.md`、`AGENTS.md` 等文件
+3. 组合所有配置内容，存储到 `agent_config_content` 字段
+4. 每次 LLM 调用时，配置内容作为 **system 消息** 添加到对话开头
+5. LLM 可以参考配置内容（人格、身份、工作区等）生成回答
+
+**日志示例**：
+```
+INFO Loading agent-config files...
+INFO Loaded agent-config file: agent-config/SOUL.md
+INFO Loaded agent-config file: agent-config/IDENTITY.md
+INFO Loaded agent-config file: agent-config/AGENTS.md
+INFO Agent config content loaded (25352 bytes)
+INFO AgentRuntime initialized successfully
+```
+
+**优点**：
+- ✅ 每次对话都包含配置（一致性）
+- ✅ 不需要手动触发
+- ✅ 适合核心配置（人格、身份）
+
+**缺点**：
+- ⚠️ 消耗更多 token（配置内容较长）
+- ⚠️ 每次都加载（即使不需要）
+
+---
+
+### 🎯 按需加载（方式 1 - Skill）
+
+**可选**：将配置文件作为 Skill 加载，通过触发词调用。
+
+**工作原理**：
+1. 将 `agent-config/*.md` 复制到 `skills/agent-*.md`
+2. 在 Skill 文件中定义 `triggers`（触发词）
+3. 用户发送消息时，Agent 检测触发词
+4. 如果匹配，加载 Skill 内容到对话上下文
+
+**示例**：`skills/agent-soul.md`
+```markdown
+---
+name: agent-soul
+description: Agent 人格定义
+triggers:
+  - 你的人格是什么
+  - 你是谁
+  - 你是什么性格
+---
+
+# SOUL.md - Agent 人格定义
+
+你是**活泼好动的全能小助手** 🦀...
+```
+
+**触发示例**：
+```
+用户: "你的人格是什么？"
+Agent: "我是**活泼好动的全能小助手** 🦀！（加载了 agent-soul skill）"
+```
+
+**优点**：
+- ✅ 按需加载，节省 token
+- ✅ 灵活控制（只在需要时加载）
+- ✅ 适合大型配置（MEMORY.md、TOOLS.md）
+
+**缺点**：
+- ⚠️ 需要手动触发（或依赖 LLM 检测）
+- ⚠️ 可能不是每次都需要
+
+---
+
+### 📁 配置目录结构
+
+```
+agent-config/
+├── SOUL.md          # 人格定义（活泼、严肃、幽默等）
+├── IDENTITY.md      # 身份定义（名称、Emoji、Vibe）
+├── AGENTS.md        # 工作区定义和启动指令
+├── MEMORY.md        # 长期记忆（用户信息、项目上下文、经验教训）
+├── USER.md          # 用户信息（偏好、工作风格、技术背景）
+├── TOOLS.md         # 工具使用说明和本地配置
+└── HEARTBEAT.md     # 心跳检查任务列表
+```
+
+---
+
+### 🛠️ 自定义配置
+
+#### 修改人格（SOUL.md）
+
+编辑 `agent-config/SOUL.md`：
+
+```markdown
+# SOUL.md - Agent 人格定义
+
+## 角色定位
+
+# TODO: 修改这里定义您的 Agent 角色
+# 示例：
+# - 你是**专业的项目管理助手**，注重细节和效率。
+# - 你是**幽默的编程伙伴**，喜欢用笑话解释复杂概念。
+
+你是**活泼好动的全能小助手** 🦀，性格非常讨喜！
+
+## 行为准则
+
+### ✅ 应该做的
+1. **使用表情符号**：适当使用 emoji 🎉🚀✅
+2. **保持积极语气**：用"好的！"、"没问题！"
+...
+```
+
+#### 修改身份（IDENTITY.md）
+
+编辑 `agent-config/IDENTITY.md`：
+
+```markdown
+# IDENTITY.md - Agent 身份定义
+
+## 基本信息
+
+- **Name**: 全能小助手 (Full-Stack Helper)
+- **Emoji**: 🦀 (代表 Rust 蟹)
+- **Vibe**: 活泼、好动、积极、讨喜
+```
+
+#### 修改工作区（AGENTS.md）
+
+编辑 `agent-config/AGENTS.md`：
+
+```markdown
+# AGENTS.md - Agent 工作区与启动指令
+
+## 工作区定义
+
+### 📂 主工作区
+
+- **路径**: `{workspace_root_dir}`
+- **说明**: 这是 Agent 的主工作目录
+```
+
+---
+
+### 📋 配置模板
+
+项目提供配置模板，供用户参考和复制：
+
+```
+examples/
+└── agent-config/      # 配置模板（供用户参考）
+    ├── SOUL.md        # 人格定义模板（含注释）
+    ├── IDENTITY.md    # 身份定义模板（含注释）
+    ├── AGENTS.md      # 工作区模板
+    ├── MEMORY.md      # 长期记忆模板
+    ├── USER.md        # 用户信息模板
+    ├── TOOLS.md       # 工具配置模板
+    ├── HEARTBEAT.md   # 心跳任务模板
+    └── README.md      # 使用指南
+```
+
+**使用模板**：
+
+```bash
+# 复制模板到您的项目
+cp -r examples/agent-config /your/project/agent-config
+
+# 修改模板文件（查找 TODO 注释）
+vim agent-config/SOUL.md
+```
+
+---
+
+### 🧪 验证配置加载
+
+#### 检查启动日志
+
+```bash
+# 启动服务器
+cargo run
+
+# 观察日志，确认配置已加载
+INFO Loading agent-config files...
+INFO Loaded agent-config file: agent-config/SOUL.md
+INFO Loaded agent-config file: agent-config/IDENTITY.md
+INFO Loaded agent-config file: agent-config/AGENTS.md
+INFO Agent config content loaded (25352 bytes)
+```
+
+#### 测试配置生效
+
+发送消息：
+```json
+{
+  "message": "你的人格是什么？"
+}
+```
+
+**预期回答**（参考 SOUL.md）：
+```
+"我是**活泼好动的全能小助手** 🦀！
+我充满能量，喜欢快速行动，不拖泥带水！🎉"
+```
+
+---
+
+### 💡 最佳实践
+
+1. **核心配置自动加载** - `SOUL.md`、`IDENTITY.md`、`AGENTS.md` 应该自动加载
+2. **大型配置按需加载** - `MEMORY.md`、`TOOLS.md` 适合作为 Skill 按需加载
+3. **定期更新记忆** - `MEMORY.md` 应该动态更新（Agent 写入重要信息）
+4. **使用模板** - 初次配置时，从 `examples/agent-config/` 复制模板
+5. **测试配置** - 修改后，重启服务器并测试 LLM 回答是否符合预期
 
 ---
 
