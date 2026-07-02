@@ -5,7 +5,7 @@ pub mod tools;
 pub mod llm;
 pub mod session;
 pub mod mcp;
-pub mod skills;
+pub mod skill;
 pub mod runtime;
 pub mod api;
 

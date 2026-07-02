@@ -1,9 +1,14 @@
-use tracing::info;
+use tracing::{info, warn};
+
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use crate::mcp::client::MCPClient;
 
 use crate::config::loader::ConfigLoader;
 use crate::llm::connector::LLMConnector;
 use crate::tools::manager::ToolManager;
 use crate::session::manager::SessionManager;
+use crate::skill::types::SkillManager;
 use crate::runtime::types::*;
 
 /// AgentRuntime - Core runtime that integrates all components
@@ -12,6 +17,7 @@ pub struct AgentRuntime {
     llm_connector: Option<LLMConnector>,
     tool_manager: ToolManager,
     session_manager: SessionManager,
+    skill_manager: Option<SkillManager>,
     logger: Box<dyn Logger + Send + Sync>,
     initialized: bool,
 }
@@ -28,6 +34,7 @@ impl AgentRuntime {
                 max_history_length: 100,
                 session_ttl: None,
             }),
+            skill_manager: None,
             logger,
             initialized: false,
         }
@@ -72,6 +79,35 @@ impl AgentRuntime {
         info!("Registering builtin tools...");
         self.register_builtin_tools()?;
         
+        // Load MCP servers (if configured)
+        if !_tools_config_path.is_empty() {
+            info!("Loading MCP servers from: {}", _tools_config_path);
+            self.load_mcp_servers(_tools_config_path).await?;
+        }
+        
+        // Load skills (if configured)
+        if let Some(skills_config) = &agent_config.skills {
+            let skills_folder = skills_config.skills_folder.clone().unwrap_or_else(|| "./skills".to_string());
+            let auto_load = skills_config.auto_load_skills.unwrap_or(true);
+            
+            info!("Loading skills from: {}", skills_folder);
+            
+            let mut skill_manager = SkillManager::new(&skills_folder, auto_load);
+            
+            match skill_manager.load_all_skills() {
+                Ok(skills) => {
+                    info!("Loaded {} skills", skills.len());
+                    for skill in &skills {
+                        info!("  - {}", skill.metadata.name);
+                    }
+                    self.skill_manager = Some(skill_manager);
+                }
+                Err(e) => {
+                    warn!("Failed to load skills: {}", e);
+                }
+            }
+        }
+        
         self.initialized = true;
         info!("AgentRuntime initialized successfully");
         info!("Registered tools: {:?}", self.tool_manager.get_tool_names());
@@ -88,6 +124,56 @@ impl AgentRuntime {
     fn register_builtin_tools(&mut self) -> Result<(), RuntimeError> {
         // Use the built-in function to register all tools
         crate::tools::builtin::register_builtin_tools(&mut self.tool_manager);
+        Ok(())
+    }
+    
+    /// Load MCP servers from tools config
+    async fn load_mcp_servers(&mut self, tools_config_path: &str) -> Result<(), RuntimeError> {
+        // Load tools config
+        let tools_config = crate::config::loader::ConfigLoader::load_tools_config(tools_config_path)
+            .map_err(|e| RuntimeError::ConfigError(format!("Failed to load tools config: {}", e)))?;
+        
+        // Check if MCP servers are configured
+        match &tools_config.mcp_servers {
+            crate::config::types::MCPServers::New(servers) => {
+                for (name, config) in servers {
+                    info!("Starting MCP server: {}", name);
+                    
+                    // Wrap in Arc<Mutex<...>> for sharing
+                    let client: Arc<Mutex<Box<dyn MCPClient + Send>>> = Arc::new(Mutex::new(Box::new(
+                        crate::mcp::stdio_client::MCPStdioClient::new(
+                            name,
+                            &config.command,
+                            config.args.clone(),
+                            config.env.clone().unwrap_or_default(),
+                        )
+                    )));
+                    
+                    // Initialize connection
+                    let init_result = client.lock().await.initialize().await
+                        .map_err(|e| RuntimeError::MCPError(format!("Failed to initialize MCP server '{}': {}", name, e)))?;
+                    
+                    info!("MCP server '{}' initialized: {:?}", name, init_result.server_info);
+                    
+                    // List available tools
+                    let tools = client.lock().await.list_tools().await
+                        .map_err(|e| RuntimeError::MCPError(format!("Failed to list tools from MCP server '{}': {}", name, e)))?;
+                    
+                    info!("MCP server '{}' provides {} tools", name, tools.len());
+                    
+                    // Register each tool
+                    for mcp_tool in tools {
+                        info!("Registering MCP tool: {}", mcp_tool.name);
+                        let executor = crate::tools::builtin::MCPToolExecutor::new(client.clone(), mcp_tool);
+                        self.tool_manager.register_tool(Box::new(executor));
+                    }
+                }
+            }
+            crate::config::types::MCPServers::Old(_) => {
+                warn!("Old MCP config format detected. Please update to new format (object with command/args).");
+            }
+        }
+        
         Ok(())
     }
     
@@ -109,6 +195,11 @@ impl AgentRuntime {
     /// Get a mutable reference to the session manager
     pub fn get_session_manager_mut(&mut self) -> &mut SessionManager {
         &mut self.session_manager
+    }
+    
+    /// Get a reference to the skill manager
+    pub fn get_skill_manager(&self) -> Option<&SkillManager> {
+        self.skill_manager.as_ref()
     }
 }
 

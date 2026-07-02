@@ -6,11 +6,13 @@
 pub mod types;
 pub mod routes;
 pub mod handlers;
+pub mod skill_handlers;
 pub mod middleware;
 
 pub use types::*;
 pub use routes::*;
 pub use handlers::*;
+pub use skill_handlers::*;
 pub use middleware::*;
 
 use axum::{
@@ -49,6 +51,7 @@ pub fn create_router(runtime: Arc<AgentRuntime>) -> Router {
         .merge(routes::run_routes())
         .merge(routes::tool_routes())
         .merge(routes::session_routes())
+        .merge(routes::skill_routes())
         .merge(routes::health_routes())
         .layer(
             ServiceBuilder::new()

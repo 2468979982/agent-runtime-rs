@@ -218,8 +218,12 @@ impl MCPClient for MCPStdioClient {
         let init_result: MCPInitializeResult = serde_json::from_value(result)
             .map_err(|e| MCPError::Serialization(format!("Failed to parse initialize result: {}", e)))?;
         
-        self.server_capabilities = Some(init_result.capabilities.clone());
-        self.server_info = Some(init_result.server_info.clone());
+        // Store server capabilities and info (they are already Option<T>)
+        let capabilities = init_result.capabilities;
+        let server_info = init_result.server_info;
+        
+        self.server_capabilities = capabilities;
+        self.server_info = server_info;
         
         // Send initialized notification
         let empty_obj = json!({});
@@ -228,7 +232,12 @@ impl MCPClient for MCPStdioClient {
         
         self.initialized = true;
         
-        Ok(init_result)
+        // Return init_result (need to reconstruct it because fields were moved)
+        Ok(MCPInitializeResult {
+            protocol_version: init_result.protocol_version,
+            capabilities: self.server_capabilities.clone(),
+            server_info: self.server_info.clone(),
+        })
     }
     
     async fn list_tools(&self) -> Result<Vec<MCPTool>, MCPError> {

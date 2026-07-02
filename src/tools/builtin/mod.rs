@@ -8,6 +8,7 @@ pub mod file_lister;
 pub mod file_deleter;
 pub mod directory_creator;
 pub mod get_current_time;
+pub mod mcp_tool_executor;
 
 pub use calculator::CalculatorTool;
 pub use file_reader::FileReaderTool;
@@ -17,6 +18,7 @@ pub use file_lister::FileListerTool;
 pub use file_deleter::FileDeleterTool;
 pub use directory_creator::DirectoryCreatorTool;
 pub use get_current_time::DatetimeTool;
+pub use mcp_tool_executor::MCPToolExecutor;
 
 /// Register all built-in tools with a ToolManager
 pub fn register_builtin_tools(manager: &mut crate::tools::manager::ToolManager) {

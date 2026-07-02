@@ -105,7 +105,8 @@ pub struct MCPNotification {
 pub struct MCPTool {
     pub name: String,
     pub description: Option<String>,
-    pub input_schema: Value,
+    #[serde(default)]
+    pub input_schema: Option<Value>,
 }
 
 /// MCP tool call request
@@ -183,9 +184,12 @@ pub struct MCPServerInfo {
 /// MCP initialize result
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MCPInitializeResult {
-    pub protocol_version: String,
-    pub capabilities: MCPServerCapabilities,
-    pub server_info: MCPServerInfo,
+    #[serde(default)]
+    pub protocol_version: Option<String>,
+    #[serde(default)]
+    pub capabilities: Option<MCPServerCapabilities>,
+    #[serde(default)]
+    pub server_info: Option<MCPServerInfo>,
 }
 
 /// Helper to create a JSON-RPC request

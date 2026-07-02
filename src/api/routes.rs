@@ -9,6 +9,7 @@ use axum::{
 use std::sync::Arc;
 
 use crate::api::handlers::*;
+use crate::api::skill_handlers::*;
 use crate::runtime::agent::AgentRuntime;
 
 /// Create routes for the /api/run endpoint
@@ -29,6 +30,14 @@ pub fn session_routes() -> Router<Arc<AgentRuntime>> {
         .route("/api/sessions", get(list_sessions_handler))
         .route("/api/sessions/:session_id", get(get_session_handler))
         .route("/api/sessions/:session_id", delete(delete_session_handler))
+}
+
+/// Create routes for skill management endpoints
+pub fn skill_routes() -> Router<Arc<AgentRuntime>> {
+    Router::new()
+        .route("/api/skills", get(list_skills_handler))
+        .route("/api/skills/:skill_name", get(get_skill_handler))
+        .route("/api/skills/:skill_name/execute", post(execute_skill_handler))
 }
 
 /// Create routes for health check endpoint
