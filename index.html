@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AGENT-RUNTIME-RS</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a2a6c, #2c3e50);
+            margin: 0;
+            padding: 0;
+            color: #ecf0f1;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        header {
+            text-align: center;
+            padding: 4rem 0;
+        }
+        h1 {
+            font-size: 3.5rem;
+            margin-bottom: 1rem;
+            background: linear-gradient(to right, #ff7e5f, #feb47b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle {
+            font-size: 1.4rem;
+            opacity: 0.9;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin: 4rem 0;
+        }
+        .feature-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 2rem;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+        .feature-card h2 {
+            font-size: 1.8rem;
+            margin-bottom: 1rem;
+            color: #ff7e5f;
+        }
+        footer {
+            text-align: center;
+            padding: 2rem 0;
+            margin-top: 4rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2.5rem;
+            }
+            .subtitle {
+                font-size: 1.2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>AGENT-RUNTIME-RS</h1>
+            <p class="subtitle">一个高性能、模块化、可扩展的 Rust Agent 运行时框架，专为构建智能代理系统而设计。</p>
+        </header>
+
+        <section class="features">
+            <div class="feature-card">
+                <h2>⚡ 高性能</h2>
+                <p>基于 Tokio 异步运行时，充分利用 Rust 的零成本抽象与内存安全特性，实现毫秒级响应与高吞吐处理能力。</p>
+            </div>
+            <div class="feature-card">
+                <h2>🧩 模块化架构</h2>
+                <p>核心 Runtime + 可插拔组件（LLM Adapter、Tool Executor、Memory Manager、Orchestrator），按需组合，灵活部署。</p>
+            </div>
+            <div class="feature-card">
+                <h2>🌐 多协议支持</h2>
+                <p>原生支持 OpenAI 兼容 API、Ollama、Anthropic、本地 GGUF 模型，无缝对接各类大模型后端。</p>
+            </div>
+        </section>
+
+        <footer>
+            <p>© 2024 AGENT-RUNTIME-RS — Built with ❤️ in Rust</p>
+        </footer>
+    </div>
+</body>
+</html>
