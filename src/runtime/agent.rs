@@ -20,6 +20,9 @@ pub struct AgentRuntime {
     skill_manager: Option<SkillManager>,
     logger: Box<dyn Logger + Send + Sync>,
     initialized: bool,
+    
+    // Agent configuration content (loaded from agent-config/ directory)
+    agent_config_content: Option<String>,
 }
 
 impl AgentRuntime {
@@ -37,6 +40,7 @@ impl AgentRuntime {
             skill_manager: None,
             logger,
             initialized: false,
+            agent_config_content: None,  // Initialize as None
         }
     }
     
@@ -107,6 +111,10 @@ impl AgentRuntime {
                 }
             }
         }
+        
+        // Load agent-config/ files (SOUL.md, IDENTITY.md, AGENTS.md, etc.)
+        info!("Loading agent-config files...");
+        self.load_agent_config_files();
         
         self.initialized = true;
         info!("AgentRuntime initialized successfully");
@@ -200,6 +208,42 @@ impl AgentRuntime {
     /// Get a reference to the skill manager
     pub fn get_skill_manager(&self) -> Option<&SkillManager> {
         self.skill_manager.as_ref()
+    }
+    
+    /// Load agent-config/ files and combine them into agent_config_content
+    fn load_agent_config_files(&mut self) {
+        let config_files = vec![
+            "agent-config/SOUL.md",
+            "agent-config/IDENTITY.md",
+            "agent-config/AGENTS.md",
+            "agent-config/MEMORY.md",
+            "agent-config/USER.md",
+            "agent-config/TOOLS.md",
+            "agent-config/HEARTBEAT.md",
+        ];
+        
+        let mut combined_content = String::from("# Agent Configuration\n\n");
+        
+        for file_path in config_files {
+            match std::fs::read_to_string(file_path) {
+                Ok(content) => {
+                    info!("Loaded agent-config file: {}", file_path);
+                    combined_content.push_str(&format!("\n---\n\n## {}\n\n{}", file_path, content));
+                }
+                Err(e) => {
+                    warn!("Failed to load agent-config file '{}': {}", file_path, e);
+                }
+            }
+        }
+        
+        let content_len = combined_content.len();
+        self.agent_config_content = Some(combined_content);
+        info!("Agent config content loaded ({} bytes)", content_len);
+    }
+    
+    /// Get the agent config content (for injecting into LLM system prompt)
+    pub fn get_agent_config_content(&self) -> Option<&str> {
+        self.agent_config_content.as_deref()
     }
 }
 

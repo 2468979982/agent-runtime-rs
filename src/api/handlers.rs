@@ -98,6 +98,27 @@ pub async fn run_handler(
         })
         .collect();
     
+    // Inject agent-config content into system message
+    let messages = if let Some(config_content) = runtime.get_agent_config_content() {
+        tracing::info!("Injecting agent-config content into system message");
+        
+        // Create a system message with agent configuration
+        let config_message = crate::llm::types::ChatMessage {
+            role: crate::llm::types::MessageRole::System,
+            content: format!("# Agent Configuration\n\nYou are an AI assistant with the following configuration:\n\n{}", config_content),
+            name: Some("agent-config".to_string()),
+            tool_calls: None,
+            tool_call_id: None,
+        };
+        
+        // Add config message to the beginning of the conversation
+        let mut new_messages = vec![config_message];
+        new_messages.extend(messages);
+        new_messages
+    } else {
+        messages
+    };
+    
     // Check if any skill should be triggered
     let skill_used = if let Some(skill_manager) = runtime.get_skill_manager() {
         skill_manager.find_skill_by_trigger(&request.message)
