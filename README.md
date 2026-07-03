@@ -127,7 +127,7 @@ Agent Runtime RS 不仅可以作为独立服务器运行，还可以作为 **Rus
 [dependencies]
 agent-runtime-rs = { path = "../agent-runtime-rs" }  # 本地路径
 # 或指定 git 仓库
-# agent-runtime-rs = { git = "https://github.com/your-repo/agent-runtime-rs.git", branch = "main" }
+# agent-runtime-rs = { git = "https://github.com/2468979982/agent-runtime-rs.git", branch = "master" }
 ```
 
 ### 基本用法
