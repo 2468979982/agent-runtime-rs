@@ -19,6 +19,7 @@
 - 🔌 **MCP 集成**: 支持 Model Context Protocol (MCP) 通过 stdio 通信
 - 📚 **技能系统**: 从 Markdown 文件加载技能（支持 YAML frontmatter）
 - 🤖 **Agent 配置**: 通过 `agent-config/` 目录配置人格、身份、工作区（自动加载 + 按需加载） 🆕
+- 💾 **会话持久化**: 自动保存/恢复会话到磁盘（JSONL 格式，异步保存，避免双重写入） 🆕
 - 🌐 **HTTP API**: RESTful API 使用 Axum (类似 Express)
 - 📊 **全面测试**: 153 个测试全部通过（11 个集成测试）
 
@@ -111,6 +112,353 @@ agent-runtime-rs/
 ├── Cargo.lock          # 依赖锁定文件
 └── README.md           # 本文档
 ```
+
+---
+
+## 📦 作为库使用（集成到其他 Rust 项目）
+
+Agent Runtime RS 不仅可以作为独立服务器运行，还可以作为 **Rust 库（crate）** 集成到您的 Rust 项目中。
+
+### 安装（作为依赖）
+
+在您的 `Cargo.toml` 中添加依赖：
+
+```toml
+[dependencies]
+agent-runtime-rs = { path = "../agent-runtime-rs" }  # 本地路径
+# 或指定 git 仓库
+# agent-runtime-rs = { git = "https://github.com/your-repo/agent-runtime-rs.git", branch = "main" }
+```
+
+### 基本用法
+
+```rust
+use agent_runtime_rs::{
+    create_agent_runtime,
+    create_agent_runtime_with_logger,
+    AgentRuntime,          // 核心运行时
+    ConfigLoader,         // 配置加载器
+    LLMConnector,         // LLM 连接器
+    ToolManager,          // 工具管理器
+    SessionManager,        // 会话管理器
+    RuntimeError,          // 错误类型
+    Logger, ConsoleLogger, // 日志接口
+    // 常用类型
+    ChatMessage, MessageRole,
+    RunRequest, RunResponse,
+};
+use std::sync::Arc;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // 方式 1：使用默认 logger 创建运行时
+    let runtime = create_agent_runtime(
+        "config/agent-config.json",
+        "config/tools-config.json",
+        "config/prompt-config.json",
+    ).await?;
+    
+    // 方式 2：使用自定义 logger
+    let custom_logger = Box::new(MyCustomLogger {});
+    let runtime = create_agent_runtime_with_logger(
+        custom_logger,
+        "config/agent-config.json",
+        "config/tools-config.json",
+        "config/prompt-config.json",
+    ).await?;
+    
+    // 使用运行时（Arc<AgentRuntime>）
+    let response = runtime.chat(
+        Some("session-123"),
+        "Hello, agent!".to_string(),
+    ).await?;
+    
+    println!("Response: {}", response.content);
+    
+    Ok(())
+}
+```
+
+### 常用集成场景
+
+#### 场景 1：在现有 Tokio 应用中使用
+
+```rust
+use agent_runtime_rs::create_agent_runtime;
+use std::sync::Arc;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // 创建 Agent 运行时（异步初始化）
+    let agent_runtime = create_agent_runtime(
+        "config/agent-config.json",
+        "config/tools-config.json",
+        "config/prompt-config.json",
+    ).await?;
+    
+    // 共享给多个服务/路由（Arc 线程安全）
+    let runtime_clone = Arc::clone(&agent_runtime);
+    tokio::spawn(async move {
+        // 在后台任务中使用
+        let _ = runtime_clone.chat(None, "Background task".to_string()).await;
+    });
+    
+    // 主线程继续使用
+    let response = agent_runtime.chat(
+        Some("my-session"),
+        "What can you do?".to_string(),
+    ).await?;
+    
+    println!("Agent: {}", response.content);
+    Ok(())
+}
+```
+
+#### 场景 2：只使用 LLM 连接器（不带工具/会话）
+
+```rust
+use agent_runtime_rs::{
+    config::loader::ConfigLoader,
+    llm::connector::LLMConnector,
+    llm::types::*, 
+};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // 手动加载配置
+    let agent_config = ConfigLoader::load_agent_config("config/agent-config.json")?;
+    
+    // 创建 LLM 连接器（不初始化完整运行时）
+    let llm = LLMConnector::new(
+        &agent_config.llm.model,
+        &agent_config.llm.api_key,
+        agent_config.llm.base_url.as_deref(),
+        Some(agent_config.llm.temperature),
+        Some(agent_config.llm.max_tokens),
+    )?;
+    
+    // 直接调用 LLM
+    let messages = vec![
+        ChatMessage {
+            role: MessageRole::System,
+            content: "You are a helpful assistant.".to_string(),
+            tool_calls: None,
+            name: None,
+        },
+        ChatMessage {
+            role: MessageRole::User,
+            content: "Hello!".to_string(),
+            tool_calls: None,
+            name: None,
+        },
+    ];
+    
+    let response = llm.chat_completion(messages, None).await?;
+    println!("LLM: {}", response.content);
+    Ok(())
+}
+```
+
+#### 场景 3：自定义工具 + Agent 运行时
+
+```rust
+use agent_runtime_rs::{
+    create_agent_runtime,
+    tools::types::{ToolExecutor, ToolParameter, ToolResult},
+    session::types::MessageRole,
+};
+use async_trait::async_trait;
+use std::sync::Arc;
+use serde_json::json;
+
+// 定义自定义工具
+struct MyCustomTool;
+
+#[async_trait]
+impl ToolExecutor for MyCustomTool {
+    async fn execute(&self, parameters: serde_json::Value) -> ToolResult {
+        let input = parameters.get("input").and_then(|v| v.as_str()).unwrap_or("");
+        ToolResult::success(format!("Processed: {}", input))
+    }
+    
+    fn get_metadata(&self) -> agent_runtime_rs::tools::types::ToolMetadata {
+        agent_runtime_rs::tools::types::ToolMetadata {
+            name: "my_custom_tool".to_string(),
+            description: "My custom tool".to_string(),
+            parameters: vec![
+                ToolParameter {
+                    name: "input".to_string(),
+                    description: "Input string".to_string(),
+                    required: true,
+                    parameter_type: "string".to_string(),
+                }
+            ],
+        }
+    }
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let runtime = create_agent_runtime(
+        "config/agent-config.json",
+        "config/tools-config.json",
+        "config/prompt-config.json",
+    ).await?;
+    
+    // 注册自定义工具
+    runtime.register_tool("my_custom_tool", Arc::new(MyCustomTool)).await?;
+    
+    // 使用 Agent（工具会自动被调用）
+    let response = runtime.chat(
+        Some("session-1"),
+        "Please use my_custom_tool to process 'hello'".to_string(),
+    ).await?;
+    
+    println!("Response: {}", response.content);
+    Ok(())
+}
+```
+
+#### 场景 4：集成到 Axum HTTP 服务器
+
+```rust
+use agent_runtime_rs::create_agent_runtime;
+use axum::{extract::State, routing::post, Json, Router};
+use std::sync::Arc;
+use serde::{Deserialize, Serialize};
+
+#[derive(Deserialize)]
+struct ChatRequest {
+    message: String,
+    session_id: Option<String>,
+}
+
+#[derive(Serialize)]
+struct ChatResponse {
+    content: String,
+    session_id: String,
+}
+
+// Axum handler
+async fn chat_handler(
+    State(runtime): State<Arc<agent_runtime_rs::AgentRuntime>>,
+    Json(req): Json<ChatRequest>,
+) -> Json<ChatResponse> {
+    let session_id = req.session_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    
+    match runtime.chat(Some(&session_id), req.message).await {
+        Ok(resp) => Json(ChatResponse {
+            content: resp.content,
+            session_id,
+        }),
+        Err(e) => Json(ChatResponse {
+            content: format!("Error: {}", e),
+            session_id,
+        }),
+    }
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // 初始化 Agent 运行时
+    let runtime = create_agent_runtime(
+        "config/agent-config.json",
+        "config/tools-config.json",
+        "config/prompt-config.json",
+    ).await?;
+    
+    // 创建 Axum 路由
+    let app = Router::new()
+        .route("/chat", post(chat_handler))
+        .with_state(runtime);
+    
+    // 启动 HTTP 服务器
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
+    axum::serve(listener, app).await?;
+    
+    Ok(())
+}
+```
+
+#### 场景 5：会话持久化（自动保存到磁盘）
+
+```rust
+use agent_runtime_rs::create_agent_runtime;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let runtime = create_agent_runtime(
+        "config/agent-config.json",  // 确保其中 session.persistence.enabled = true
+        "config/tools-config.json",
+        "config/prompt-config.json",
+    ).await?;
+    
+    // 会话会自动保存到 ./data/sessions/*.jsonl
+    // 重启后自动恢复
+    
+    // 第一次运行：创建会话
+    let response = runtime.chat(
+        Some("persistent-session"),
+        "Remember: my name is Alice".to_string(),
+    ).await?;
+    println!("{}", response.content);
+    
+    // 重启程序后...
+    // 第二次运行：会话自动恢复，Agent 记得之前的对话
+    let response2 = runtime.chat(
+        Some("persistent-session"),
+        "What's my name?".to_string(),
+    ).await?;
+    println!("{}", response2.content);  // 应该输出 "Alice"
+    
+    Ok(())
+}
+```
+
+### 配置说明
+
+#### Agent 配置（config/agent-config.json）
+
+```json
+{
+  "llm": {
+    "provider": "openaicompatible",
+    "apiKey": "${ENV:OPENAI_API_KEY}",
+    "baseURL": "${ENV:OPENAI_BASE_URL}",
+    "model": "qwen-plus",
+    "temperature": 0.7,
+    "maxTokens": 10000,
+    "mock": false
+  },
+  "session": {
+    "maxHistoryLength": 100,
+    "sessionTTL": 3600,
+    "persistence": {
+      "enabled": true,
+      "storagePath": "./data/sessions",
+      "autoSaveInterval": 300,
+      "format": "jsonl"
+    }
+  },
+  "tools": {
+    "builtinTools": ["calculator", "get_current_time", "read_file", "write_file"],
+    "autoExecuteTools": true,
+    "sandboxDir": "./data"
+  },
+  "skills": {
+    "autoLoadSkills": true,
+    "skillsFolder": "./skills"
+  }
+}
+```
+
+### 更多示例
+
+完整示例请查看 `examples/` 目录：
+- `examples/basic_usage.rs` - 基本用法
+- `examples/custom_tool.rs` - 自定义工具
+- `examples/axum_integration.rs` - 集成到 Axum
+- `examples/session_persistence.rs` - 会话持久化
 
 ---
 
@@ -1009,6 +1357,7 @@ echo "RUST_LOG=debug" >> .env
 - [x] **阶段 7**: 核心运行时 (AgentRuntime)
 - [x] **阶段 8**: HTTP API 服务器 (Axum) + 技能管理 API
 - [x] **阶段 8.5**: Agent 配置系统 (agent-config/) - 自动加载 + 按需加载 🆕
+- [x] **阶段 8.7**: 会话持久化 (Session Persistence) - 自动保存/恢复，JSONL 格式，避免双重写入 🆕
 - [ ] **阶段 9**: OpenAPI/Swagger 文档 (utoipa 集成进行中)
 - [ ] **阶段 10**: Docker 镜像
 - [ ] **阶段 11**: 性能优化 (异步改进)
