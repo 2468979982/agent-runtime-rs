@@ -2,6 +2,19 @@
 name = "agent-runtime-rs"
 version = "0.1.0"
 edition = "2021"
+description = "AI Agent Runtime - LLM integration, tool management, session management, skill system, MCP integration"
+authors = ["QClaw AI"]
+license = "MIT"
+repository = "https://github.com/qclaw/agent-runtime-rs"
+keywords = ["ai", "agent", "llm", "openai", "mcp"]
+
+[lib]
+name = "agent_runtime_rs"
+path = "src/lib.rs"
+
+[[bin]]
+name = "agent-runtime-rs"
+path = "src/main.rs"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }

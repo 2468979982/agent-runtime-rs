@@ -1,3 +1,6 @@
+// Agent Runtime RS - Main Entry Point
+// This binary uses the agent_runtime_rs library (defined in src/lib.rs)
+
 use agent_runtime_rs::{
     utils::logger,
     api::create_router,
@@ -27,11 +30,10 @@ async fn main() -> anyhow::Result<()> {
         agent_config_path,
         tools_config_path,
         prompt_config_path,
-        None,
     ).await {
         Ok(rt) => {
             tracing::info!("AgentRuntime initialized successfully");
-            Arc::new(rt)
+            rt  // Already Arc<AgentRuntime>, no need to wrap again
         }
         Err(e) => {
             tracing::error!("Failed to initialize AgentRuntime: {}", e);
