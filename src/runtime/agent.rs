@@ -11,6 +11,7 @@ use crate::session::manager::SessionManager;
 use crate::session::persistence::SessionPersistenceManager;
 use crate::skill::types::SkillManager;
 use crate::runtime::types::*;
+use crate::api::types;  // Add this line
 
 /// AgentRuntime - Core runtime that integrates all components
 #[allow(dead_code)]
@@ -359,6 +360,168 @@ impl AgentRuntime {
     /// Get the agent config content (for injecting into LLM system prompt)
     pub fn get_agent_config_content(&self) -> Option<&str> {
         self.agent_config_content.as_deref()
+    }
+    
+    /// Run a chat conversation with the agent (library API, no HTTP needed)
+    ///
+    /// # Arguments
+    /// * `session_id` - Optional session ID (if None, a new session will be created)
+    /// * `message` - User message
+    ///
+    /// # Returns
+    /// * `types::RunResponse` - Agent response (content, tool_calls, session_id, finish_reason)
+    ///
+    /// # Example
+    /// ```no_run
+    /// use agent_runtime_rs::create_agent_runtime;
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> anyhow::Result<()> {
+    ///     let runtime = create_agent_runtime(
+    ///         "config/agent-config.json",
+    ///         "config/tools-config.json",
+    ///         "config/prompt-config.json",
+    ///     ).await?;
+    ///     
+    ///     let response = runtime.chat(
+    ///         Some("my-session"),
+    ///         "Hello, agent!".to_string(),
+    ///     ).await?;
+    ///     
+    ///     println!("Agent: {}", response.content);
+    ///     Ok(())
+    /// }
+    /// ```
+    pub async fn chat(
+        &self,
+        session_id: Option<&str>,
+        message: String,
+    ) -> anyhow::Result<types::RunResponse> {
+        // Create request
+        let request = types::RunRequest {
+            session_id: session_id.map(|s| s.to_string()),
+            message,
+        };
+        
+        // Call internal handler logic (extracted from run_handler)
+        self.handle_run_request(request).await
+    }
+    
+    /// Internal method: handle run request (core logic from run_handler)
+    async fn handle_run_request(
+        &self,
+        request: types::RunRequest,
+    ) -> anyhow::Result<types::RunResponse> {
+        use crate::api::types::RunResponse;
+        use crate::session::types::Message;
+        use crate::llm::types::ChatMessage;
+        
+        // Check initialization
+        if !self.initialized {
+            return Err(anyhow::anyhow!("AgentRuntime not initialized. Call initialize() first."));
+        }
+        
+        // Get or create session
+        let session_id = match request.session_id {
+            Some(id) => id,
+            None => {
+                let session = self.session_manager.create_session()?;
+                session.id
+            }
+        };
+        
+        // Ensure session exists
+        if self.session_manager.get_session(&session_id).is_err() {
+            let _ = self.session_manager.create_session_with_id(session_id.clone())?;
+        }
+        
+        // Add user message to session
+        let user_message = Message::new(
+            crate::session::types::MessageRole::User,
+            request.message.clone(),
+        );
+        self.session_manager.add_message(&session_id, user_message)?;
+        
+        // Get conversation history
+        let history = self.session_manager.get_history(&session_id)?;
+        
+        // Convert history to LLM messages
+        let mut messages = Vec::new();
+        
+        // Add system message (agent config)
+        if let Some(config_content) = self.get_agent_config_content() {
+            messages.push(ChatMessage {
+                role: crate::llm::types::MessageRole::System,
+                content: config_content.to_string(),
+                tool_calls: None,
+                name: None,
+            });
+        }
+        
+        // Add skill triggers (if any)
+        if let Some(skill_manager) = &self.skill_manager {
+            let trigger_result = skill_manager.find_skill_by_trigger(&request.message);
+            if let Some(skill) = trigger_result {
+                let skill_content = format!("\n\n[Skill: {}]\n{}\n", skill.metadata.name, skill.content);
+                messages.push(ChatMessage {
+                    role: crate::llm::types::MessageRole::System,
+                    content: skill_content,
+                    tool_calls: None,
+                    name: None,
+                });
+            }
+        }
+        
+        // Add history messages
+        for msg in history {
+            let role = match msg.role {
+                crate::session::types::MessageRole::User => crate::llm::types::MessageRole::User,
+                crate::session::types::MessageRole::Assistant => crate::llm::types::MessageRole::Assistant,
+                crate::session::types::MessageRole::System => crate::llm::types::MessageRole::System,
+                crate::session::types::MessageRole::Tool => crate::llm::types::MessageRole::Tool,
+            };
+            
+            messages.push(ChatMessage {
+                role,
+                content: msg.content,
+                tool_calls: msg.tool_calls.map(|tc| serde_json::to_value(tc).unwrap_or_default()),
+                name: msg.name,
+            });
+        }
+        
+        // Get LLM connector
+        let llm = self.llm_connector.as_ref().ok_or_else(|| {
+            anyhow::anyhow!("LLM connector not initialized")
+        })?;
+        
+        // Get tools for LLM
+        let tools = if self.tool_manager.get_tool_names().len() > 0 {
+            Some(self.tool_manager.get_all_tools()?)
+        } else {
+            None
+        };
+        
+        // Call LLM
+        let llm_response = llm.chat_completion(messages, tools).await
+            .map_err(|e| anyhow::anyhow!("LLM error: {}", e))?;
+        
+        // Add assistant message to session
+        let assistant_message = Message::new(
+            crate::session::types::MessageRole::Assistant,
+            llm_response.content.clone(),
+        );
+        self.session_manager.add_message(&session_id, assistant_message)?;
+        
+        // Build response
+        let response = RunResponse {
+            response: llm_response.content,
+            tool_calls: Vec::new(), // TODO: extract from llm_response
+            session_id,
+            finish_reason: "stop".to_string(),
+            skill_used: None, // TODO: track skill usage
+        };
+        
+        Ok(response)
     }
 }
 
