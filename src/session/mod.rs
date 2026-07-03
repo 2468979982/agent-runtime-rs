@@ -4,9 +4,11 @@
 
 pub mod types;
 pub mod manager;
+pub mod persistence;
 
 pub use types::*;
 pub use manager::SessionManager;
+pub use persistence::SessionPersistenceManager;
 
 #[cfg(test)]
 mod tests {

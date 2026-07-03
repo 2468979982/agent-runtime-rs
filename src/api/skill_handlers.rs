@@ -9,11 +9,8 @@
 
 use axum::{
     extract::{State, Path, Json},
-    http::StatusCode,
 };
 use std::sync::Arc;
-use std::collections::HashMap;
-
 use crate::api::types::*;
 use crate::runtime::agent::AgentRuntime;
 

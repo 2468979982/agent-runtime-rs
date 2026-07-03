@@ -6,7 +6,6 @@ use agent_runtime_rs::{
     api::create_router,
     create_agent_runtime,
 };
-use std::sync::Arc;
 use std::net::SocketAddr;
 
 #[tokio::main]

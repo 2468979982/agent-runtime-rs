@@ -56,6 +56,17 @@ pub enum LLMProvider {
 pub struct SessionConfig {
     pub max_history_length: usize,
     pub session_ttl: Option<u64>,
+    pub persistence: Option<SessionPersistenceConfig>,
+}
+
+/// Session persistence configuration
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionPersistenceConfig {
+    pub enabled: bool,
+    pub storage_path: String,
+    pub auto_save_interval: u64,  // seconds
+    pub format: String,  // "jsonl" or "json"
 }
 
 /// Logging configuration

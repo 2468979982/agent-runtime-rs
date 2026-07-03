@@ -8,6 +8,7 @@ use crate::config::loader::ConfigLoader;
 use crate::llm::connector::LLMConnector;
 use crate::tools::manager::ToolManager;
 use crate::session::manager::SessionManager;
+use crate::session::persistence::SessionPersistenceManager;
 use crate::skill::types::SkillManager;
 use crate::runtime::types::*;
 
@@ -43,8 +44,8 @@ impl AgentRuntime {
             skill_manager: None,
             logger,
             initialized: false,
-            agent_config_content: None,  // Initialize as None
-            config_summary_threshold: 5000,  // Default threshold: 5000 bytes
+            agent_config_content: None,
+            config_summary_threshold: 5000,
         }
     }
     
@@ -122,6 +123,35 @@ impl AgentRuntime {
         // Load agent-config/ files (SOUL.md, IDENTITY.md, AGENTS.md, etc.)
         info!("Loading agent-config files...");
         self.load_agent_config_files();
+        
+        // Initialize session persistence manager
+        if let Some(ref persistence_config) = agent_config.session.persistence {
+            if persistence_config.enabled {
+                info!("Initializing session persistence manager...");
+                match SessionPersistenceManager::new(persistence_config) {
+                    Ok(manager) => {
+                        info!("Session persistence enabled: storage_path={}", 
+                            manager.get_storage_path().display());
+                        let manager_arc = std::sync::Arc::new(manager);
+                        
+                        // 设置到 SessionManager
+                        self.session_manager.set_persistence_manager(manager_arc);
+                        
+                        // 加载持久化会话
+                        if let Err(e) = self.session_manager.load_persisted_sessions().await {
+                            warn!("Failed to load persisted sessions: {}", e);
+                        }
+                    }
+                    Err(e) => {
+                        warn!("Failed to initialize session persistence: {}. Persistence disabled.", e);
+                    }
+                }
+            } else {
+                info!("Session persistence is disabled in config");
+            }
+        } else {
+            info!("No persistence config found, using default (disabled)");
+        }
         
         // Generate summary of agent-config using LLM (optimization: reduce token usage)
         if let Some(ref config_content) = self.agent_config_content {

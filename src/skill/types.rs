@@ -188,6 +188,7 @@ pub struct SkillManager {
     skills_folder: String,
     
     /// Whether to auto-load skills
+    #[allow(dead_code)]
     auto_load: bool,
 }
 

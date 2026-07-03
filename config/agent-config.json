@@ -10,7 +10,13 @@
   },
   "session": {
     "maxHistoryLength": 100,
-    "sessionTTL": 3600
+    "sessionTTL": 3600,
+    "persistence": {
+      "enabled": true,
+      "storagePath": "./data/sessions",
+      "autoSaveInterval": 300,
+      "format": "jsonl"
+    }
   },
   "logging": {
     "level": "info",
