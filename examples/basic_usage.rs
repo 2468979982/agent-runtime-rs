@@ -1,5 +1,6 @@
 // examples/basic_usage.rs
 // 基本用法示例：创建 Agent 运行时并发送消息
+// 运行方式：cargo run --example basic_usage
 
 use agent_runtime_rs::create_agent_runtime;
 use std::sync::Arc;
@@ -29,7 +30,7 @@ async fn main() -> anyhow::Result<()> {
             "Hello! What can you do?".to_string(),
         )
         .await?;
-    println!("Agent: {}", response.content);
+    println!("Agent: {}", response.response);
 
     // 示例 2：使用工具
     println!("\n📝 Example 2: Using tools");
@@ -39,7 +40,7 @@ async fn main() -> anyhow::Result<()> {
             "Calculate 123 * 456".to_string(),
         )
         .await?;
-    println!("Agent: {}", response.content);
+    println!("Agent: {}", response.response);
 
     // 示例 3：多轮对话（会话保持上下文）
     println!("\n📝 Example 3: Multi-turn conversation");
@@ -49,7 +50,7 @@ async fn main() -> anyhow::Result<()> {
             "What did I just ask you to calculate?".to_string(),
         )
         .await?;
-    println!("Agent: {}", response.content);
+    println!("Agent: {}", response.response);
 
     // 示例 4：新会话（无上下文）
     println!("\n📝 Example 4: New session (no context)");
@@ -59,7 +60,7 @@ async fn main() -> anyhow::Result<()> {
             "What did I just ask you to calculate?".to_string(),
         )
         .await?;
-    println!("Agent: {}", response.content);
+    println!("Agent: {}", response.response);
 
     println!("\n✅ All examples completed successfully!");
 

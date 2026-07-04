@@ -305,12 +305,12 @@ mod tests {
         let tool = MCPTool {
             name: "test_tool".to_string(),
             description: Some("A test tool".to_string()),
-            input_schema: serde_json::json!({
+            input_schema: Some(serde_json::json!({  // 注意：Option<Value>
                 "type": "object",
                 "properties": {
                     "param1": {"type": "string"}
                 }
-            }),
+            })),
         };
         
         assert_eq!(tool.name, "test_tool");

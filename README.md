@@ -173,7 +173,7 @@ async fn main() -> anyhow::Result<()> {
         "Hello, agent!".to_string(),
     ).await?;
     
-    println!("Response: {}", response.content);
+    println!("Response: {}", response.response);  // 注意：字段是 `response` 不是 `content`
     
     Ok(())
 }
@@ -401,7 +401,7 @@ async fn main() -> anyhow::Result<()> {
         Some("persistent-session"),
         "Remember: my name is Alice".to_string(),
     ).await?;
-    println!("{}", response.content);
+    println!("{}", response.response);
     
     // 重启程序后...
     // 第二次运行：会话自动恢复，Agent 记得之前的对话
@@ -409,7 +409,7 @@ async fn main() -> anyhow::Result<()> {
         Some("persistent-session"),
         "What's my name?".to_string(),
     ).await?;
-    println!("{}", response2.content);  // 应该输出 "Alice"
+    println!("{}", response2.response);  // 应该输出 "Alice"
     
     Ok(())
 }

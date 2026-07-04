@@ -412,8 +412,7 @@ impl AgentRuntime {
         &self,
         request: types::RunRequest,
     ) -> anyhow::Result<types::RunResponse> {
-        use crate::api::types::RunResponse;
-        use crate::session::types::Message;
+        use crate::session::types::{Message, MessageRole};
         use crate::llm::types::ChatMessage;
         
         // Check initialization
@@ -423,7 +422,7 @@ impl AgentRuntime {
         
         // Get or create session
         let session_id = match request.session_id {
-            Some(id) => id,
+            Some(ref id) => id.clone(),
             None => {
                 let session = self.session_manager.create_session()?;
                 session.id
@@ -436,57 +435,70 @@ impl AgentRuntime {
         }
         
         // Add user message to session
-        let user_message = Message::new(
-            crate::session::types::MessageRole::User,
-            request.message.clone(),
-        );
+        let user_message = Message {
+            role: MessageRole::User,
+            content: request.message.clone(),
+            name: None,
+            tool_calls: None,
+            tool_call_id: None,
+        };
         self.session_manager.add_message(&session_id, user_message)?;
         
         // Get conversation history
         let history = self.session_manager.get_history(&session_id)?;
         
         // Convert history to LLM messages
-        let mut messages = Vec::new();
+        let mut messages: Vec<ChatMessage> = history.iter()
+            .map(|msg| {
+                let role = match msg.role {
+                    MessageRole::System => crate::llm::types::MessageRole::System,
+                    MessageRole::User => crate::llm::types::MessageRole::User,
+                    MessageRole::Assistant => crate::llm::types::MessageRole::Assistant,
+                    MessageRole::Tool => crate::llm::types::MessageRole::Tool,
+                };
+                ChatMessage {
+                    role,
+                    content: msg.content.clone(),
+                    name: msg.name.clone(),
+                    tool_calls: None,  // TODO: convert session::types::ToolCall to llm::types::ToolCall
+                    tool_call_id: msg.tool_call_id.clone(),
+                }
+            })
+            .collect();
         
-        // Add system message (agent config)
+        // Inject agent-config content into system message
         if let Some(config_content) = self.get_agent_config_content() {
-            messages.push(ChatMessage {
+            tracing::info!("Injecting agent-config content into system message");
+            let config_message = ChatMessage {
                 role: crate::llm::types::MessageRole::System,
-                content: config_content.to_string(),
+                content: format!("# Agent Configuration\n\nYou are an AI assistant with the following configuration:\n\n{}", config_content),
+                name: Some("agent-config".to_string()),
                 tool_calls: None,
-                name: None,
-            });
-        }
-        
-        // Add skill triggers (if any)
-        if let Some(skill_manager) = &self.skill_manager {
-            let trigger_result = skill_manager.find_skill_by_trigger(&request.message);
-            if let Some(skill) = trigger_result {
-                let skill_content = format!("\n\n[Skill: {}]\n{}\n", skill.metadata.name, skill.content);
-                messages.push(ChatMessage {
-                    role: crate::llm::types::MessageRole::System,
-                    content: skill_content,
-                    tool_calls: None,
-                    name: None,
-                });
-            }
-        }
-        
-        // Add history messages
-        for msg in history {
-            let role = match msg.role {
-                crate::session::types::MessageRole::User => crate::llm::types::MessageRole::User,
-                crate::session::types::MessageRole::Assistant => crate::llm::types::MessageRole::Assistant,
-                crate::session::types::MessageRole::System => crate::llm::types::MessageRole::System,
-                crate::session::types::MessageRole::Tool => crate::llm::types::MessageRole::Tool,
+                tool_call_id: None,
             };
-            
-            messages.push(ChatMessage {
-                role,
-                content: msg.content,
-                tool_calls: msg.tool_calls.map(|tc| serde_json::to_value(tc).unwrap_or_default()),
-                name: msg.name,
-            });
+            messages.insert(0, config_message);
+        }
+        
+        // Check if any skill should be triggered
+        let skill_used = if let Some(ref skill_manager) = self.skill_manager {
+            skill_manager.find_skill_by_trigger(&request.message)
+        } else {
+            None
+        };
+        
+        // If a skill is triggered, add its content to the messages
+        if let Some(ref skill_name) = skill_used {
+            tracing::info!("Skill triggered: {}", skill_name);
+            if let Some(skill) = self.skill_manager.as_ref().and_then(|sm| sm.get_skill(skill_name)) {
+                let skill_message = ChatMessage {
+                    role: crate::llm::types::MessageRole::System,
+                    content: format!("You have access to the following skill:\n\n{}", skill.content),
+                    name: Some(format!("skill-{}", skill_name)),
+                    tool_calls: None,
+                    tool_call_id: None,
+                };
+                messages.insert(0, skill_message);
+            }
         }
         
         // Get LLM connector
@@ -494,31 +506,48 @@ impl AgentRuntime {
             anyhow::anyhow!("LLM connector not initialized")
         })?;
         
-        // Get tools for LLM
-        let tools = if self.tool_manager.get_tool_names().len() > 0 {
-            Some(self.tool_manager.get_all_tools()?)
-        } else {
-            None
-        };
+        // Get available tools (for function calling)
+        let tool_names = self.tool_manager.get_tool_names();
+        let tools: Vec<crate::tools::types::ToolMetadata> = tool_names.iter()
+            .filter_map(|name| self.tool_manager.get_tool_metadata(name).cloned())
+            .collect();
         
         // Call LLM
-        let llm_response = llm.chat_completion(messages, tools).await
+        tracing::info!("Calling LLM with {} messages and {} tools", messages.len(), tools.len());
+        let llm_response = llm.chat_completion(messages, Some(tools)).await
             .map_err(|e| anyhow::anyhow!("LLM error: {}", e))?;
         
+        // Extract response text from LLM response
+        let response_text = if let Some(first_choice) = llm_response.choices.first() {
+            if let Some(ref tool_calls_list) = first_choice.message.tool_calls {
+                // LLM wants to call tools
+                tracing::info!("LLM requested {} tool calls", tool_calls_list.len());
+                // TODO: execute tool calls and send results back to LLM
+                format!("Tool calls requested: {}", serde_json::to_string(tool_calls_list).unwrap_or_default())
+            } else {
+                // Direct text response
+                first_choice.message.content.clone()
+            }
+        } else {
+            "No response from LLM".to_string()
+        };
+        
         // Add assistant message to session
-        let assistant_message = Message::new(
-            crate::session::types::MessageRole::Assistant,
-            llm_response.content.clone(),
-        );
+        let assistant_message = Message {
+            role: MessageRole::Assistant,
+            content: response_text.clone(),
+            name: None,
+            tool_calls: None,
+            tool_call_id: None,
+        };
         self.session_manager.add_message(&session_id, assistant_message)?;
         
         // Build response
-        let response = RunResponse {
-            response: llm_response.content,
-            tool_calls: Vec::new(), // TODO: extract from llm_response
+        let response = types::RunResponse {
+            response: response_text,
+            tool_calls: Vec::new(),  // TODO: extract from llm_response
             session_id,
-            finish_reason: "stop".to_string(),
-            skill_used: None, // TODO: track skill usage
+            skill_used,  // Option<String>
         };
         
         Ok(response)

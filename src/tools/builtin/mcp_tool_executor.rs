@@ -110,7 +110,7 @@ mod tests {
                     MCPTool {
                         name: "mock_tool".to_string(),
                         description: Some("A mock tool".to_string()),
-                        input_schema: json!({"type": "object"}),
+                        input_schema: Some(json!({"type": "object"})),  // 注意：Option<Value>
                     },
                 ],
             }
@@ -125,15 +125,16 @@ mod tests {
         
         async fn initialize(&mut self) -> Result<MCPInitializeResult, MCPError> {
             Ok(MCPInitializeResult {
-                server_capabilities: MCPServerCapabilities {
+                protocol_version: Some("2024-11-05".to_string()),
+                capabilities: Some(MCPServerCapabilities {
                     tools: Some(json!({})),
                     resources: None,
                     prompts: None,
-                },
-                server_info: MCPServerInfo {
+                }),
+                server_info: Some(MCPServerInfo {
                     name: self.server_name.clone(),
                     version: "1.0.0".to_string(),
-                },
+                }),
             })
         }
         
@@ -144,11 +145,9 @@ mod tests {
         async fn call_tool(&self, tool_name: &str, _arguments: Value) -> Result<MCPToolResult, MCPError> {
             Ok(MCPToolResult {
                 content: vec![
-                    MCPContent::Text {
-                        text: format!("Mock result from {}", tool_name),
-                    },
+                    MCPContent::text(&format!("Mock result from {}", tool_name)),
                 ],
-                is_error: false,
+                is_error: Some(false),
             })
         }
         
@@ -171,11 +170,11 @@ mod tests {
     
     #[tokio::test]
     async fn test_mcp_tool_executor() {
-        let client = Box::new(MockMCPClient::new("mock-server"));
+        let client = Arc::new(Mutex::new(Box::new(MockMCPClient::new("mock-server")) as Box<dyn MCPClient + Send>));
         let mcp_tool = MCPTool {
             name: "mock_tool".to_string(),
             description: Some("A mock tool".to_string()),
-            input_schema: json!({"type": "object"}),
+            input_schema: Some(json!({"type": "object"})),  // Option<Value>
         };
         
         let executor = MCPToolExecutor::new(client, mcp_tool);
