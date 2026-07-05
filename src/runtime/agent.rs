@@ -512,30 +512,108 @@ impl AgentRuntime {
             .filter_map(|name| self.tool_manager.get_tool_metadata(name).cloned())
             .collect();
         
-        // Call LLM
-        tracing::info!("Calling LLM with {} messages and {} tools", messages.len(), tools.len());
-        let llm_response = llm.chat_completion(messages, Some(tools)).await
-            .map_err(|e| anyhow::anyhow!("LLM error: {}", e))?;
+        // Tool call loop (max 5 iterations to prevent infinite loops)
+        let mut final_response_text = String::new();
+        let mut tool_calls_results = Vec::new();
+        let max_iterations = 5;
         
-        // Extract response text from LLM response
-        let response_text = if let Some(first_choice) = llm_response.choices.first() {
-            if let Some(ref tool_calls_list) = first_choice.message.tool_calls {
-                // LLM wants to call tools
-                tracing::info!("LLM requested {} tool calls", tool_calls_list.len());
-                // TODO: execute tool calls and send results back to LLM
-                format!("Tool calls requested: {}", serde_json::to_string(tool_calls_list).unwrap_or_default())
+        for iteration in 0..max_iterations {
+            tracing::info!("LLM call iteration {}/{}", iteration + 1, max_iterations);
+            
+            // Call LLM
+            tracing::info!("Calling LLM with {} messages and {} tools", messages.len(), tools.len());
+            let llm_response = llm.chat_completion(messages.clone(), Some(tools.clone())).await
+                .map_err(|e| anyhow::anyhow!("LLM error: {}", e))?;
+            
+            // Check if LLM wants to call tools
+            if let Some(first_choice) = llm_response.choices.first() {
+                if let Some(ref tool_calls_list) = first_choice.message.tool_calls {
+                    tracing::info!("LLM requested {} tool calls", tool_calls_list.len());
+                    
+                    // Execute all tool calls
+                    let mut tool_results = Vec::new();
+                    for tool_call in tool_calls_list {
+                        let tool_name = tool_call.function.name.clone();
+                        let parameters = serde_json::from_str::<serde_json::Value>(&tool_call.function.arguments)
+                            .unwrap_or(serde_json::json!({}));
+                        
+                        tracing::info!("Executing tool: {} with params: {}", tool_name, parameters);
+                        
+                        // Execute tool
+                        match self.tool_manager.execute_tool_call(&tool_name, parameters).await {
+                            Ok(result) => {
+                                tracing::info!("Tool execution succeeded: {}", result.output);
+                                tool_results.push(serde_json::json!({
+                                    "tool_call_id": tool_call.id,
+                                    "role": "tool",
+                                    "content": result.output
+                                }));
+                                tool_calls_results.push(serde_json::json!({
+                                    "tool_call_id": tool_call.id,
+                                    "tool_name": tool_name,
+                                    "result": result.output
+                                }));
+                            }
+                            Err(e) => {
+                                tracing::error!("Tool execution failed: {}", e);
+                                let error_msg = format!("Tool execution error: {}", e);
+                                tool_results.push(serde_json::json!({
+                                    "tool_call_id": tool_call.id,
+                                    "role": "tool",
+                                    "content": error_msg
+                                }));
+                                tool_calls_results.push(serde_json::json!({
+                                    "tool_call_id": tool_call.id,
+                                    "tool_name": tool_name,
+                                    "error": e.to_string()
+                                }));
+                            }
+                        }
+                    }
+                    
+                    // Add assistant message (with tool_calls) to messages
+                    messages.push(ChatMessage {
+                        role: crate::llm::types::MessageRole::Assistant,
+                        content: first_choice.message.content.clone(),
+                        name: first_choice.message.name.clone(),
+                        tool_calls: Some(tool_calls_list.clone()),
+                        tool_call_id: None,
+                    });
+                    
+                    // Add tool results as tool messages
+                    for tool_result in tool_results {
+                        messages.push(ChatMessage {
+                            role: crate::llm::types::MessageRole::Tool,
+                            content: tool_result["content"].as_str().unwrap_or("").to_string(),
+                            name: None,
+                            tool_calls: None,
+                            tool_call_id: tool_result["tool_call_id"].as_str().map(|s| s.to_string()),
+                        });
+                    }
+                    
+                    // Continue loop (send updated messages back to LLM)
+                    continue;
+                } else {
+                    // No tool calls - this is the final text response
+                    final_response_text = first_choice.message.content.clone();
+                    break;
+                }
             } else {
-                // Direct text response
-                first_choice.message.content.clone()
+                final_response_text = "No response from LLM".to_string();
+                break;
             }
-        } else {
-            "No response from LLM".to_string()
-        };
+        }
+        
+        // If we exhausted iterations, use last response
+        if final_response_text.is_empty() {
+            tracing::warn!("Exhausted max iterations ({}) for tool calls", max_iterations);
+            final_response_text = "Tool call loop exceeded maximum iterations".to_string();
+        }
         
         // Add assistant message to session
         let assistant_message = Message {
             role: MessageRole::Assistant,
-            content: response_text.clone(),
+            content: final_response_text.clone(),
             name: None,
             tool_calls: None,
             tool_call_id: None,
@@ -544,8 +622,8 @@ impl AgentRuntime {
         
         // Build response
         let response = types::RunResponse {
-            response: response_text,
-            tool_calls: Vec::new(),  // TODO: extract from llm_response
+            response: final_response_text,
+            tool_calls: tool_calls_results,
             session_id,
             skill_used,  // Option<String>
         };
