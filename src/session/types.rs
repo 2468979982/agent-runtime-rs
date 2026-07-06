@@ -2,15 +2,14 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// 聊天消息角色
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum MessageRole {
-    System,
-    User,
-    Assistant,
-    Tool,
-}
+// #[derive(Debug, Clone, Serialize, Deserialize)]
+// #[serde(rename_all = "lowercase")]
+// pub enum MessageRole {
+//     System,
+//     User,
+//     Assistant,
+//     Tool,
+// }
 
 /// 工具调用
 #[derive(Debug, Clone, Serialize, Deserialize)]

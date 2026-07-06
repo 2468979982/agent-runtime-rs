@@ -12,7 +12,8 @@ use uuid::Uuid;
 
 use crate::api::types::*;
 use crate::runtime::agent::AgentRuntime;
-use crate::session::types::{Message, MessageRole};
+use crate::session::types::{Message};
+use crate::llm::types::MessageRole;
 
 /// Handler for POST /api/run
 ///

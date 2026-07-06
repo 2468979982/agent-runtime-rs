@@ -37,7 +37,7 @@ pub use session::types::{Session, Message};
 pub use skill::types::Skill;
 
 // Re-export API types
-pub use api::types::{RunRequest, RunResponse};
+pub use api::types::{RunRequest, RunResponse,ApiError,SessionResponse};
 pub use api::handlers::{run_handler, tool_call_handler};
 
 // Public API functions
