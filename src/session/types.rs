@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+pub use crate::llm::types::MessageRole;
 
 // #[derive(Debug, Clone, Serialize, Deserialize)]
 // #[serde(rename_all = "lowercase")]
