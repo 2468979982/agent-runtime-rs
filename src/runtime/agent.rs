@@ -536,7 +536,7 @@ impl AgentRuntime {
                         let tool_name = tool_call.function.name.clone();
                         let parameters = serde_json::from_str::<serde_json::Value>(&tool_call.function.arguments)
                             .unwrap_or(serde_json::json!({}));
-                        
+                        println!("parameters: {}",parameters);
                         tracing::info!("Executing tool: {} with params: {}", tool_name, parameters);
                         
                         // Execute tool
