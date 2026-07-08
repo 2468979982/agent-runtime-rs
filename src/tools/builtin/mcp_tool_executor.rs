@@ -52,7 +52,11 @@ impl ToolExecutor for MCPToolExecutor {
     
     async fn execute(&self, parameters: Value) -> Result<ToolResult, ToolError> {
         // Extract tool arguments from parameters
-        let arguments = parameters.get("arguments").unwrap_or(&json!({})).clone();
+        // let arguments = parameters.get("arguments").unwrap_or(&json!({})).clone();
+        let arguments = parameters.clone();
+
+        println!("MCPToolExecutor executing with parameters: {:?}", parameters);
+        println!("Executing MCP tool with arguments: {:?}", arguments);
         
         // Get client lock
         let client = self.client.lock().await;

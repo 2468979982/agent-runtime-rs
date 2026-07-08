@@ -259,6 +259,8 @@ impl MCPClient for MCPStdioClient {
         if !self.initialized {
             return Err(MCPError::Connection("Not initialized".to_string()));
         }
+
+        print!("Calling tool: {} with arguments: {}", tool_name, arguments);
         
         // First, get the tool definition to validate
         let tools = self.list_tools().await?;
@@ -391,10 +393,10 @@ mod tests {
         let tool = MCPTool {
             name: "test_tool".to_string(),
             description: Some("Test".to_string()),
-            input_schema: json!({
+            input_schema: Some(json!({
                 "type": "object",
                 "properties": {}
-            }),
+            })),
         };
         
         let args = json!({});
@@ -407,7 +409,10 @@ mod tests {
         let tool = MCPTool {
             name: "test_tool".to_string(),
             description: None,
-            input_schema: json!({}),
+            input_schema: Some(json!({
+                "type": "object",
+                "properties": {}
+            })),
         };
         
         let args = json!("invalid");

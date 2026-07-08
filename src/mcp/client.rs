@@ -84,12 +84,12 @@ mod tests {
         let tool = MCPTool {
             name: "test_tool".to_string(),
             description: None,
-            input_schema: json!({
+            input_schema: Some(json!({
                 "type": "object",
                 "properties": {
                     "param1": {"type": "string"}
                 }
-            }),
+            })),
         };
         
         let args = json!({"param1": "value1"});
@@ -102,7 +102,10 @@ mod tests {
         let tool = MCPTool {
             name: "test_tool".to_string(),
             description: None,
-            input_schema: json!({}),
+            input_schema: Some(json!({
+                "type": "object",
+                "properties": {}
+            })),
         };
         
         let args = json!("not an object");
@@ -121,7 +124,10 @@ mod tests {
         let tool = MCPTool {
             name: "test_tool".to_string(),
             description: None,
-            input_schema: json!({}),
+            input_schema: Some(json!({
+                "type": "object",
+                "properties": {}
+            })),
         };
         
         let args = json!([1, 2, 3]);
