@@ -4,7 +4,7 @@
 //! tool calls to an MCP server via an `MCPClient` instance.
 
 use async_trait::async_trait;
-use serde_json::{Value, json};
+use serde_json::{Value};
 use crate::tools::types::*;
 use crate::mcp::client::MCPClient;
 use crate::mcp::types::MCPTool;
