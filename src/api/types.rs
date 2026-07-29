@@ -12,7 +12,7 @@ pub struct RunRequest {
     /// Session ID for the conversation
     pub session_id: Option<String>,
 
-    pub prompt: String,
+    pub prompt: Option<String>,
     
     /// Message to send to the agent
     pub message: String,

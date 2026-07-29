@@ -395,7 +395,7 @@ impl AgentRuntime {
     pub async fn chat(
         &self,
         session_id: Option<&str>,
-        prompt: String,
+        prompt: Option<String>,
         message: String,
     ) -> anyhow::Result<types::RunResponse> {
         // Create request
