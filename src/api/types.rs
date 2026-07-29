@@ -11,6 +11,8 @@ use crate::runtime::types::RuntimeError;
 pub struct RunRequest {
     /// Session ID for the conversation
     pub session_id: Option<String>,
+
+    pub prompt: String,
     
     /// Message to send to the agent
     pub message: String,

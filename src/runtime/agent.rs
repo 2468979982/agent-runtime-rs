@@ -395,11 +395,13 @@ impl AgentRuntime {
     pub async fn chat(
         &self,
         session_id: Option<&str>,
+        prompt: String,
         message: String,
     ) -> anyhow::Result<types::RunResponse> {
         // Create request
         let request = types::RunRequest {
             session_id: session_id.map(|s| s.to_string()),
+            prompt,
             message,
         };
         
@@ -465,7 +467,19 @@ impl AgentRuntime {
                 }
             })
             .collect();
-        
+
+        if request.prompt.is_empty() {
+            tracing::warn!("Prompt is empty. Proceeding with conversation history only.");
+        } else {
+                messages.push(ChatMessage {
+                role: crate::llm::types::MessageRole::System,
+                content: request.prompt,
+                name: None,
+                tool_calls: None,
+                tool_call_id: None,
+            });
+        }
+
         // Inject agent-config content into system message
         if let Some(config_content) = self.get_agent_config_content() {
             tracing::info!("Injecting agent-config content into system message");
