@@ -468,7 +468,7 @@ impl AgentRuntime {
             })
             .collect();
 
-        if request.prompt.is_none() || request.prompt.as_ref().unwrap().trim().is_empty() {
+        if request.prompt.is_none() || request.prompt.as_ref().unwrap_or(&String::new()).trim().is_empty() {
             tracing::warn!("Prompt is empty. Proceeding with conversation history only.");
         } else {
                 messages.push(ChatMessage {
