@@ -27,6 +27,7 @@ async fn main() -> anyhow::Result<()> {
     let response = runtime
         .chat(
             Some("example-session-1"),
+            None,
             "Hello! What can you do?".to_string(),
         )
         .await?;
@@ -37,6 +38,7 @@ async fn main() -> anyhow::Result<()> {
     let response = runtime
         .chat(
             Some("example-session-1"),
+            None,
             "Calculate 123 * 456".to_string(),
         )
         .await?;
@@ -47,6 +49,7 @@ async fn main() -> anyhow::Result<()> {
     let response = runtime
         .chat(
             Some("example-session-1"),
+            None,
             "What did I just ask you to calculate?".to_string(),
         )
         .await?;
@@ -57,6 +60,7 @@ async fn main() -> anyhow::Result<()> {
     let response = runtime
         .chat(
             Some("example-session-2"),
+            None,
             "What did I just ask you to calculate?".to_string(),
         )
         .await?;

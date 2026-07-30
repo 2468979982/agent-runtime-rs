@@ -468,12 +468,12 @@ impl AgentRuntime {
             })
             .collect();
 
-        if request.prompt.is_empty() {
+        if request.prompt.is_none() || request.prompt.as_ref().unwrap().trim().is_empty() {
             tracing::warn!("Prompt is empty. Proceeding with conversation history only.");
         } else {
                 messages.push(ChatMessage {
                 role: crate::llm::types::MessageRole::System,
-                content: request.prompt,
+                content: request.prompt.clone().unwrap_or_default(),
                 name: None,
                 tool_calls: None,
                 tool_call_id: None,
